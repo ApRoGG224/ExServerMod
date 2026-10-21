@@ -51,15 +51,50 @@ flowchart TD
 
 ## 3. Sub-Modes
 1. **Classic Mode**: Standard player models, no disguises.
-2. **Mob Disguise Mode**:
-   - Random mob selected from curated pool of 34 balanced mobs (no bosses, no flyers, no griefers: Zombie, Skeleton, Creeper, Iron Golem, Warden, Sniffer, etc.).
-   - Dynamic scaling via vanilla `Attributes.SCALE`.
-   - **Collision Guardrail / Anti-Stuck**: Large mobs (Iron Golem, Warden) cannot clip into 1x1 or 1x2 crawlspaces.
-   - Client camera eye height adjusted to match mob height.
+2. **Mob Disguise Mode (All Minecraft 1.21.1 Living Entities)**:
+   - **Expanded Mob Pool**: Includes **all living entities** in Minecraft (70+ mobs), from tiny creatures (Silverfish, Bee, Frog, Axolotl) to giants (Warden, Iron Golem, Ravager, and Bosses).
+   - **Dynamic Scaling via `Attributes.SCALE`**: Scales the player's bounding box and model proportionally to the disguised mob's dimensions.
+   - **Environmental Immunity Safeguards**:
+     - Aquatic mobs (Axolotl, Dolphin, Squid, Fish) are granted permanent water-breathing and dehydration immunity so they never suffocate on land.
+     - Destructive mobs (Warden, Ender Dragon, Wither) have their block-destruction behaviors suppressed per `docs/gameplay-rules.md` (Zero Block Griefing invariant).
+   - **Collision Guardrail & Anti-Stuck**: If large mobs clip or suffocate inside solid geometry, the automated anti-stuck relocator safely shifts them to the nearest air space.
+   - **Client Camera**: Eye-height is dynamically synchronized to match the disguised entity's actual eye height.
 
 ---
 
-## 4. Visual Roulette Wheel (`RouletteScreen`)
+## 4. Acoustic & Intellectual Hinting Engine (Seeking Phase)
+
+To balance hiding as tiny, flying, or exotic mobs without spoiling the mystery, the server runs three complementary hint loops during the `SEEKING` phase:
+
+### 4.1 Acoustic Sound Taunt (Every 45 seconds / 900 ticks)
+- The hider involuntarily emits their disguised mob's authentic vanilla ambient sound (`ambientSound`).
+- Audible to the seeker within a spherical radius of **35–40 blocks**, turning close-range hunting into an acoustic search.
+
+### 4.2 Intellectual Categorical Hint (Every 1 minute 30 seconds / 1800 ticks)
+- Broadcasts a categorical clue to chat (using strict i18n keys) without revealing the specific mob name:
+  - **Size Class**:
+    - *Tiny* (height < 0.8m): Silverfish, Endermite, Bee, Baby Turtle, Frog.
+    - *Medium* (0.8m ≤ height ≤ 2.4m): Cow, Zombie, Skeleton, Creeper, Piglin.
+    - *Colossal* (height > 2.4m): Warden, Iron Golem, Enderman, Ravager, Ghast.
+  - **Habitat / Origin**:
+    - *Nether Origin*: Ghast, Blaze, Piglin, Strider, Magma Cube, Wither Skeleton.
+    - *Aquatic Entity*: Dolphin, Guardian, Squid, Drowned, Turtle, Fish.
+    - *End Origin*: Enderman, Shulker, Endermite.
+    - *Overworld Native*: Farm animals, standard monsters, villagers.
+  - **Locomotion**:
+    - *Aerial / Flying*: Bat, Bee, Phantom, Parrot, Blaze, Ghast.
+    - *Terrestrial*: Standard ground walkers.
+  - **Disposition**:
+    - *Peaceful / Passive*: Farm animals, bats, allays.
+    - *Hostile / Predator*: Monsters and bosses.
+
+### 4.3 Landmark Proximity Hints (Every 50 seconds / 1000 ticks)
+- Broadcasts horizontal distance comparison: *"Out of all builds, the hider is closest to: <Landmark>"*.
+- Alert on 20-block relocation: Triggered once if the hider strays >20 blocks from their hiding spot.
+
+---
+
+## 5. Visual Roulette Wheel (`RouletteScreen`)
 - Client-side custom screen (`Screen`) opening during mob selection.
 - Spinning tape of mob icons with smooth easing (`easeOutCubic`).
 - Audio feedback: tick clicks (`UI_BUTTON_CLICK`) on passing icons.
@@ -67,7 +102,7 @@ flowchart TD
 
 ---
 
-## 5. Landmark Proximity System
+## 6. Landmark Proximity System
 - Persistent storage: `config/landmarks.json`.
 - Commands:
   - `/location-add <radius> <name>` (radius defaults to 50, Y spans -64..1000).
@@ -78,7 +113,7 @@ flowchart TD
 
 ---
 
-## 6. Commands Reference
+## 7. Commands Reference
 - `/games` — check status or start voting.
 - `/games vote <classic|mob>` — vote for sub-mode.
 - `/games startsearch` — start hunting phase early.
@@ -87,7 +122,7 @@ flowchart TD
 
 ---
 
-## 7. BlueMap Integration & Stealth Invariant
+## 8. BlueMap Integration & Stealth Invariant
 - During `HIDING` and `SEEKING` phases:
   - Participants' map visibility is set to hidden via BlueMap API (`setPlayerVisibility(false)`).
   - Breadcrumb trails / markers are frozen/cleared.
