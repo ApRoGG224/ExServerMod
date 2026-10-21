@@ -1,5 +1,6 @@
 package com.fome.exservermod
 
+import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.game.GameCommands
 import com.fome.exservermod.game.GameEventHandler
 import com.fome.exservermod.game.HideAndSeekGame
@@ -14,6 +15,7 @@ object ExServerMod : ModInitializer {
     private val logger = LoggerFactory.getLogger(MOD_ID)
 
     val game = HideAndSeekGame()
+    val disguiseManager = DisguiseManager()
     val landmarkManager by lazy {
         val configFile =
             FabricLoader
@@ -27,10 +29,10 @@ object ExServerMod : ModInitializer {
     override fun onInitialize() {
         logger.info("[ExServerMod] Initializing server mod.")
 
-        GameEventHandler(game, landmarkManager).register()
-        GameCommands(game).register()
+        GameEventHandler(game, landmarkManager, disguiseManager).register()
+        GameCommands(game, disguiseManager).register()
         LandmarkCommands(landmarkManager).register()
 
-        logger.info("[ExServerMod] Core game and landmarks initialized.")
+        logger.info("[ExServerMod] Core game, disguise engine, and landmarks initialized.")
     }
 }
