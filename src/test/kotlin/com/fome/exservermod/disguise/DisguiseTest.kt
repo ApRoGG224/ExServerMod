@@ -1,13 +1,19 @@
 package com.fome.exservermod.disguise
 
+import com.fome.exservermod.game.GameEventHandler
+import com.fome.exservermod.game.HideAndSeekGame
 import net.minecraft.SharedConstants
+import net.minecraft.network.chat.contents.TranslatableContents
 import net.minecraft.server.Bootstrap
+import net.minecraft.sounds.SoundEvents
 import net.minecraft.world.entity.EntityTypes
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import java.util.UUID
 import kotlin.random.Random
 
 class DisguiseTest {
@@ -21,51 +27,152 @@ class DisguiseTest {
     }
 
     @Test
-    fun `test mob pool contains exactly 34 curated mobs`() {
-        assertEquals(34, MobPool.POOL.size)
-        assertEquals(34, MobPool.POOL.distinct().size)
+    fun `test expanded mob pool contains all living entities`() {
+        assertTrue(MobPool.POOL.size >= 70, "Mob pool must contain at least 70 entities, found ${MobPool.POOL.size}")
+        assertEquals(MobPool.POOL.size, MobPool.POOL.distinct().size, "All entities in pool must be distinct")
+
+        // Tiny mobs
+        assertTrue(MobPool.POOL.contains(EntityTypes.BEE))
+        assertTrue(MobPool.POOL.contains(EntityTypes.SILVERFISH))
+        assertTrue(MobPool.POOL.contains(EntityTypes.FROG))
+        assertTrue(MobPool.POOL.contains(EntityTypes.CHICKEN))
+
+        // Bosses & Colossal mobs
+        assertTrue(MobPool.POOL.contains(EntityTypes.WARDEN))
+        assertTrue(MobPool.POOL.contains(EntityTypes.IRON_GOLEM))
+        assertTrue(MobPool.POOL.contains(EntityTypes.ENDER_DRAGON))
+        assertTrue(MobPool.POOL.contains(EntityTypes.WITHER))
+
+        // Flying mobs
+        assertTrue(MobPool.POOL.contains(EntityTypes.BAT))
+        assertTrue(MobPool.POOL.contains(EntityTypes.PHANTOM))
+        assertTrue(MobPool.POOL.contains(EntityTypes.GHAST))
+        assertTrue(MobPool.POOL.contains(EntityTypes.BLAZE))
+
+        // Aquatic mobs
+        assertTrue(MobPool.POOL.contains(EntityTypes.DOLPHIN))
+        assertTrue(MobPool.POOL.contains(EntityTypes.AXOLOTL))
+        assertTrue(MobPool.POOL.contains(EntityTypes.DROWNED))
     }
 
     @Test
-    fun `test mob pool excludes bosses and flying entities`() {
-        val forbidden =
-            listOf(
-                EntityTypes.ENDER_DRAGON,
-                EntityTypes.WITHER,
-                EntityTypes.ELDER_GUARDIAN,
-                EntityTypes.PHANTOM,
-                EntityTypes.BAT,
-                EntityTypes.GHAST,
-                EntityTypes.ALLAY,
-                EntityTypes.BEE,
-                EntityTypes.BLAZE,
-                EntityTypes.PARROT,
-                EntityTypes.VEX,
-            )
+    fun `test trait categorization size classes`() {
+        assertEquals(SizeClass.TINY, MobPool.getSizeClass(EntityTypes.BEE))
+        assertEquals(SizeClass.TINY, MobPool.getSizeClass(EntityTypes.SILVERFISH))
+        assertEquals(SizeClass.TINY, MobPool.getSizeClass(EntityTypes.ENDERMITE))
+        assertEquals(SizeClass.TINY, MobPool.getSizeClass(EntityTypes.CHICKEN))
 
-        for (entityType in forbidden) {
-            assertFalse(
-                MobPool.POOL.contains(entityType),
-                "MobPool must not contain forbidden entity: $entityType",
-            )
-        }
+        assertEquals(SizeClass.MEDIUM, MobPool.getSizeClass(EntityTypes.ZOMBIE))
+        assertEquals(SizeClass.MEDIUM, MobPool.getSizeClass(EntityTypes.SKELETON))
+        assertEquals(SizeClass.MEDIUM, MobPool.getSizeClass(EntityTypes.CREEPER))
+        assertEquals(SizeClass.MEDIUM, MobPool.getSizeClass(EntityTypes.COW))
+
+        assertEquals(SizeClass.COLOSSAL, MobPool.getSizeClass(EntityTypes.WARDEN))
+        assertEquals(SizeClass.COLOSSAL, MobPool.getSizeClass(EntityTypes.ENDERMAN))
+        assertEquals(SizeClass.COLOSSAL, MobPool.getSizeClass(EntityTypes.IRON_GOLEM))
+        assertEquals(SizeClass.COLOSSAL, MobPool.getSizeClass(EntityTypes.GHAST))
+        assertEquals(SizeClass.COLOSSAL, MobPool.getSizeClass(EntityTypes.ENDER_DRAGON))
+    }
+
+    @Test
+    fun `test trait categorization origins`() {
+        assertEquals(Origin.NETHER, MobPool.getOrigin(EntityTypes.GHAST))
+        assertEquals(Origin.NETHER, MobPool.getOrigin(EntityTypes.BLAZE))
+        assertEquals(Origin.NETHER, MobPool.getOrigin(EntityTypes.PIGLIN))
+        assertEquals(Origin.NETHER, MobPool.getOrigin(EntityTypes.WITHER))
+
+        assertEquals(Origin.THE_END, MobPool.getOrigin(EntityTypes.ENDERMAN))
+        assertEquals(Origin.THE_END, MobPool.getOrigin(EntityTypes.SHULKER))
+        assertEquals(Origin.THE_END, MobPool.getOrigin(EntityTypes.ENDER_DRAGON))
+
+        assertEquals(Origin.AQUATIC, MobPool.getOrigin(EntityTypes.DOLPHIN))
+        assertEquals(Origin.AQUATIC, MobPool.getOrigin(EntityTypes.AXOLOTL))
+        assertEquals(Origin.AQUATIC, MobPool.getOrigin(EntityTypes.DROWNED))
+
+        assertEquals(Origin.OVERWORLD, MobPool.getOrigin(EntityTypes.COW))
+        assertEquals(Origin.OVERWORLD, MobPool.getOrigin(EntityTypes.CREEPER))
+        assertEquals(Origin.OVERWORLD, MobPool.getOrigin(EntityTypes.VILLAGER))
+    }
+
+    @Test
+    fun `test trait categorization locomotion`() {
+        assertEquals(Locomotion.FLYING, MobPool.getLocomotion(EntityTypes.BAT))
+        assertEquals(Locomotion.FLYING, MobPool.getLocomotion(EntityTypes.BEE))
+        assertEquals(Locomotion.FLYING, MobPool.getLocomotion(EntityTypes.PHANTOM))
+        assertEquals(Locomotion.FLYING, MobPool.getLocomotion(EntityTypes.GHAST))
+        assertEquals(Locomotion.FLYING, MobPool.getLocomotion(EntityTypes.ENDER_DRAGON))
+
+        assertEquals(Locomotion.TERRESTRIAL, MobPool.getLocomotion(EntityTypes.ZOMBIE))
+        assertEquals(Locomotion.TERRESTRIAL, MobPool.getLocomotion(EntityTypes.COW))
+        assertEquals(Locomotion.TERRESTRIAL, MobPool.getLocomotion(EntityTypes.WARDEN))
+    }
+
+    @Test
+    fun `test trait categorization disposition`() {
+        assertEquals(Disposition.PASSIVE, MobPool.getDisposition(EntityTypes.COW))
+        assertEquals(Disposition.PASSIVE, MobPool.getDisposition(EntityTypes.SHEEP))
+        assertEquals(Disposition.PASSIVE, MobPool.getDisposition(EntityTypes.ALLAY))
+        assertEquals(Disposition.PASSIVE, MobPool.getDisposition(EntityTypes.VILLAGER))
+
+        assertEquals(Disposition.HOSTILE, MobPool.getDisposition(EntityTypes.ZOMBIE))
+        assertEquals(Disposition.HOSTILE, MobPool.getDisposition(EntityTypes.CREEPER))
+        assertEquals(Disposition.HOSTILE, MobPool.getDisposition(EntityTypes.WARDEN))
+        assertEquals(Disposition.HOSTILE, MobPool.getDisposition(EntityTypes.WITHER))
+    }
+
+    @Test
+    fun `test hint generation translatable keys`() {
+        val sizeHint = MobPool.getHint(EntityTypes.BEE, HintCategory.SIZE)
+        val sizeContents = sizeHint.contents as TranslatableContents
+        assertEquals("exservermod.disguise.hint.size.tiny", sizeContents.key)
+
+        val originHint = MobPool.getHint(EntityTypes.GHAST, HintCategory.ORIGIN)
+        val originContents = originHint.contents as TranslatableContents
+        assertEquals("exservermod.disguise.hint.origin.nether", originContents.key)
+
+        val locomotionHint = MobPool.getHint(EntityTypes.BAT, HintCategory.LOCOMOTION)
+        val locomotionContents = locomotionHint.contents as TranslatableContents
+        assertEquals("exservermod.disguise.hint.locomotion.flying", locomotionContents.key)
+
+        val dispositionHint = MobPool.getHint(EntityTypes.ZOMBIE, HintCategory.DISPOSITION)
+        val dispositionContents = dispositionHint.contents as TranslatableContents
+        assertEquals("exservermod.disguise.hint.disposition.hostile", dispositionContents.key)
+    }
+
+    @Test
+    fun `test ambient sound retrieval`() {
+        assertEquals(SoundEvents.ZOMBIE_AMBIENT, MobPool.getAmbientSound(EntityTypes.ZOMBIE))
+        assertEquals(SoundEvents.CREEPER_PRIMED, MobPool.getAmbientSound(EntityTypes.CREEPER))
+        assertEquals(SoundEvents.WARDEN_AMBIENT, MobPool.getAmbientSound(EntityTypes.WARDEN))
+        assertEquals(SoundEvents.GHAST_AMBIENT, MobPool.getAmbientSound(EntityTypes.GHAST))
+
+        // Fallback for unmapped or generic mob
+        assertNotNull(MobPool.getAmbientSound(EntityTypes.GIANT))
+    }
+
+    @Test
+    fun `test seeking phase hint interval timers`() {
+        assertEquals(900, GameEventHandler.ACOUSTIC_TAUNT_INTERVAL_TICKS)
+        assertEquals(45, GameEventHandler.ACOUSTIC_TAUNT_INTERVAL_TICKS / HideAndSeekGame.TICKS_PER_SECOND)
+
+        assertEquals(1800, GameEventHandler.INTELLECTUAL_HINT_INTERVAL_TICKS)
+        assertEquals(90, GameEventHandler.INTELLECTUAL_HINT_INTERVAL_TICKS / HideAndSeekGame.TICKS_PER_SECOND)
+
+        assertEquals(1000, GameEventHandler.HINT_INTERVAL_TICKS)
+        assertEquals(50, GameEventHandler.HINT_INTERVAL_TICKS / HideAndSeekGame.TICKS_PER_SECOND)
     }
 
     @Test
     fun `test calculateScale formula`() {
-        // Standard player dimensions: 0.6 width, 1.8 height -> scale 1.0
         val playerScale = MobPool.calculateScale(0.6f, 1.8f)
         assertEquals(1.0, playerScale, 1e-4)
 
-        // Wider entity: width 1.4f, height 2.7f -> max(1.4/0.6, 2.7/1.8) = max(2.3333, 1.5) = 2.3333
         val ironGolemScale = MobPool.calculateScale(1.4f, 2.7f)
         assertEquals(1.4 / 0.6, ironGolemScale, 1e-4)
 
-        // Taller entity: width 0.6f, height 2.9f -> max(0.6/0.6, 2.9/1.8) = max(1.0, 1.6111) = 1.6111
         val endermanScale = MobPool.calculateScale(0.6f, 2.9f)
         assertEquals(2.9 / 1.8, endermanScale, 1e-4)
 
-        // Smaller entity: width 0.4f, height 0.7f -> max(0.4/0.6, 0.7/1.8) = max(0.6666, 0.3888) = 0.6666
         val chickenScale = MobPool.calculateScale(0.4f, 0.7f)
         assertEquals(0.4 / 0.6, chickenScale, 1e-4)
     }
@@ -74,19 +181,19 @@ class DisguiseTest {
     fun `test getRandomMob returns elements from pool`() {
         val random = Random(42)
         val selected = mutableSetOf<Any>()
-        repeat(100) {
+        repeat(200) {
             val mob = MobPool.getRandomMob(random)
             assertTrue(MobPool.POOL.contains(mob))
             selected.add(mob)
         }
-        assertTrue(selected.size > 1, "Random selection should sample different mobs")
+        assertTrue(selected.size > 20, "Random selection should sample a wide variety of mobs")
     }
 
     @Test
     fun `test disguise manager state tracking`() {
         val manager = DisguiseManager()
-        val player1 = java.util.UUID.randomUUID()
-        val player2 = java.util.UUID.randomUUID()
+        val player1 = UUID.randomUUID()
+        val player2 = UUID.randomUUID()
 
         assertFalse(manager.isDisguised(player1))
         assertEquals(null, manager.getDisguise(player1))
