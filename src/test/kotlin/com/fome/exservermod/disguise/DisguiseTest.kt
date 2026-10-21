@@ -81,4 +81,31 @@ class DisguiseTest {
         }
         assertTrue(selected.size > 1, "Random selection should sample different mobs")
     }
+
+    @Test
+    fun `test disguise manager state tracking`() {
+        val manager = DisguiseManager()
+        val player1 = java.util.UUID.randomUUID()
+        val player2 = java.util.UUID.randomUUID()
+
+        assertFalse(manager.isDisguised(player1))
+        assertEquals(null, manager.getDisguise(player1))
+
+        manager.recordDisguise(player1, EntityTypes.ZOMBIE)
+        manager.recordDisguise(player2, EntityTypes.CREEPER)
+
+        assertTrue(manager.isDisguised(player1))
+        assertEquals(EntityTypes.ZOMBIE, manager.getDisguise(player1))
+        assertTrue(manager.isDisguised(player2))
+        assertEquals(EntityTypes.CREEPER, manager.getDisguise(player2))
+
+        val removed = manager.removeDisguise(player1)
+        assertEquals(EntityTypes.ZOMBIE, removed)
+        assertFalse(manager.isDisguised(player1))
+        assertTrue(manager.isDisguised(player2))
+
+        manager.clearAllDisguises()
+        assertFalse(manager.isDisguised(player2))
+        assertTrue(manager.disguises.isEmpty())
+    }
 }
