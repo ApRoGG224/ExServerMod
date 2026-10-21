@@ -14,7 +14,7 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
 - [docs/development-and-testing.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/development-and-testing.md): Fast local testing guide (sandbox `runClient`, Hot-Reload, JUnit 5).
 - [docs/architecture.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/architecture.md): Architecture, language exclusivity (Kotlin), and deployment specs.
 - [docs/gameplay-rules.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/gameplay-rules.md): Gameplay invariants (zero griefing, no teleportation, anti-stuck only).
-- [docs/decisions/0003-strict-i18n.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n.md): ADR 0003 enforcing strict `Component.translatable` for all user-facing strings.
+- [docs/decisions/0003-strict-i18n-localization.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n-localization.md): ADR 0003 enforcing strict `Component.translatable` for all user-facing strings.
 - [src/main/resources/assets/exservermod/lang/en_us.json](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/resources/assets/exservermod/lang/en_us.json): Comprehensive central translation catalog for game and landmark messages.
 - [Taskfile.yml](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/Taskfile.yml): Task pipeline (`task pre-commit`, `task test`, `task build`, `task deploy`).
 - [scripts/bump_version.py](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/scripts/bump_version.py): Version bumper.
