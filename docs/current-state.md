@@ -4,7 +4,7 @@
 The project documentation, gameplay rules, testing workflow, and architecture are fully initialized for **ExServerMod** — a Kotlin-only Fabric mod for Minecraft 26.2+ (on Java 25) implementing Hide & Seek, Mob Disguises, and a Visual Roulette Wheel.
 
 ## Active Status
-**Task 3 Completed**. Ready for **Task 4: Mob Disguise Engine & Scale Hitbox System**.
+**Task 4 Completed**. Ready for **Task 5: Visual Roulette Screen & Client Animation**.
 
 ---
 
@@ -29,9 +29,13 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
   - [Landmark.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/Landmark.kt): Landmark model with pure distance-to-perimeter calculation.
   - [LandmarkManager.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/LandmarkManager.kt): Persistence via `config/exservermod/landmarks.json` and closest landmark lookup.
   - [LandmarkCommands.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/LandmarkCommands.kt): Commands `/location-add`, `/location-remove`, `/location-list` with strict i18n.
+- [src/main/kotlin/com/fome/exservermod/disguise/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/):
+  - [MobPool.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/MobPool.kt): Curated pool of 34 balanced ground mobs, filtering out bosses and flying entities, with pure scale calculation formula.
+  - [DisguiseManager.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/DisguiseManager.kt): Mob disguise engine managing hitbox scale (`Attributes.SCALE`), infinite particle-free invisibility, safe anti-stuck relocation, and lifecycle cleanup.
 - [src/test/kotlin/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/):
   - [HideAndSeekGameTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/game/HideAndSeekGameTest.kt): Unit tests for game transitions, roles, and timers.
   - [LandmarkTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/landmarks/LandmarkTest.kt): Unit tests for perimeter distance calculation, closest search, and JSON persistence.
+  - [DisguiseTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/disguise/DisguiseTest.kt): Unit tests for 34 curated mob pool verification, exclusion of prohibited entities, scale math, and state tracking.
 
 ---
 
@@ -55,5 +59,12 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
   - Commands `/location-add`, `/location-remove`, `/location-list`.
   - Proximity hint broadcast (every 50s) and 20-block movement alert in Hide & Seek.
   - Unit tests in `LandmarkTest.kt`.
-- [ ] **Task 4: Mob Disguise Engine & Scale Hitbox System**
+- [x] **Task 4: Mob Disguise Engine & Scale Hitbox System**
+  - Curated 34 balanced ground mob pool (zero bosses, zero flying entities).
+  - Dynamic scale adjustment via vanilla `Attributes.SCALE` (`max(mobWidth / 0.6, mobHeight / 1.8)`).
+  - Infinite invisibility without particles (`MobEffects.INVISIBILITY`).
+  - Automated anti-stuck safeguard relocating trapped players to safe air blocks.
+  - Strict stealth invariant: only hider knows their disguise during hiding/seeking; revealed at intermission.
+  - State tracking, cleanup on disconnect, intermission, idle, and server stop.
+  - Comprehensive unit tests in `DisguiseTest.kt`.
 - [ ] **Task 5: Visual Roulette Screen & Client Animation**
