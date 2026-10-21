@@ -1,21 +1,21 @@
 # Project Current State
 
 ## Summary
-The project documentation, gameplay rules, testing workflow, and architecture are fully initialized for **ExServerMod** — a Kotlin-only Fabric mod for Minecraft 26.2+ (on Java 25) implementing Hide & Seek, Mob Disguises, and a Visual Roulette Wheel.
+The project documentation, gameplay rules, testing workflow, and architecture are fully implemented for **ExServerMod** — a Kotlin-only Fabric mod for Minecraft 26.2+ (on Java 25) implementing Hide & Seek, Mob Disguises, Visual Roulette Wheel, and BlueMap stealth synchronization.
 
 ## Active Status
-**Task 4 Completed**. Ready for **Task 5: Visual Roulette Screen & Client Animation**.
+**All Tasks Completed (100% Ready)**. Tasks 1 through 6 are fully implemented, verified, and tested with 0 errors.
 
 ---
 
 ## Implemented Components
 - [AGENT.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/AGENT.md): Root guidelines, command reference, strict i18n rule, and constraints.
-- [docs/features/hide-and-seek.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/features/hide-and-seek.md): Complete game design specification for Hide & Seek, Mob Mode, Roulette Wheel, and Landmarks.
+- [docs/features/hide-and-seek.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/features/hide-and-seek.md): Complete game design specification for Hide & Seek, Mob Mode, Roulette Wheel, Landmarks, and BlueMap stealth integration.
 - [docs/development-and-testing.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/development-and-testing.md): Fast local testing guide (sandbox `runClient`, Hot-Reload, JUnit 5).
 - [docs/architecture.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/architecture.md): Architecture, language exclusivity (Kotlin), and deployment specs.
 - [docs/gameplay-rules.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/gameplay-rules.md): Gameplay invariants (zero griefing, no teleportation, anti-stuck only).
 - [docs/decisions/0003-strict-i18n-localization.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n-localization.md): ADR 0003 enforcing strict `Component.translatable` for all user-facing strings.
-- [src/main/resources/assets/exservermod/lang/en_us.json](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/resources/assets/exservermod/lang/en_us.json): Comprehensive central translation catalog for game and landmark messages.
+- [src/main/resources/assets/exservermod/lang/en_us.json](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/resources/assets/exservermod/lang/en_us.json): Comprehensive central translation catalog for game, landmark, disguise hints, and roulette messages.
 - [Taskfile.yml](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/Taskfile.yml): Task pipeline (`task pre-commit`, `task test`, `task build`, `task deploy`).
 - [scripts/bump_version.py](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/scripts/bump_version.py): Version bumper.
 - [scripts/deploy_exaroton.py](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/scripts/deploy_exaroton.py): Exaroton REST deployer.
@@ -23,19 +23,30 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
 - [settings.gradle.kts](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/settings.gradle.kts) & [build.gradle.kts](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/build.gradle.kts): Operational build pipeline with Fabric Loom 1.19.2 and Kotlin 2.4.21.
 - [src/main/kotlin/com/fome/exservermod/game/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/game/):
   - [HideAndSeekGame.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/game/HideAndSeekGame.kt): Core state machine (IDLE, VOTING, HIDING, SEEKING, INTERMISSION).
-  - [GameEventHandler.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/game/GameEventHandler.kt): Fabric event integration with strict i18n, damage immunity, block protection, elytra restrictions, periodic landmark proximity hints, 20-block movement warning, and seeker hit detection.
-  - [GameCommands.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/game/GameCommands.kt): Command `/games` (`vote`, `startsearch`, `continue`, `leave`) with clickable translatable buttons.
+  - [GameEventHandler.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/game/GameEventHandler.kt): Fabric event integration with strict i18n, damage immunity, block protection, elytra restrictions, periodic landmark proximity hints, 20-block movement warning, seeker hit detection, and BlueMap stealth synchronization.
+  - [GameCommands.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/game/GameCommands.kt): Command `/games` (`vote`, `startsearch`, `continue`, `leave`) with clickable translatable buttons and automatic roulette triggering.
 - [src/main/kotlin/com/fome/exservermod/landmarks/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/):
   - [Landmark.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/Landmark.kt): Landmark model with pure distance-to-perimeter calculation.
   - [LandmarkManager.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/LandmarkManager.kt): Persistence via `config/exservermod/landmarks.json` and closest landmark lookup.
   - [LandmarkCommands.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/landmarks/LandmarkCommands.kt): Commands `/location-add`, `/location-remove`, `/location-list` with strict i18n.
 - [src/main/kotlin/com/fome/exservermod/disguise/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/):
-  - [MobPool.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/MobPool.kt): Curated pool of 34 balanced ground mobs, filtering out bosses and flying entities, with pure scale calculation formula.
-  - [DisguiseManager.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/DisguiseManager.kt): Mob disguise engine managing hitbox scale (`Attributes.SCALE`), infinite particle-free invisibility, safe anti-stuck relocation, and lifecycle cleanup.
+  - [MobPool.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/MobPool.kt): Curated pool of 80+ living mobs with 4-axis trait categorization, ambient sound mapping, and scale calculation formula.
+  - [DisguiseManager.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/DisguiseManager.kt): Mob disguise engine managing hitbox scale (`Attributes.SCALE`), infinite particle-free invisibility, environmental immunity for aquatics, safe anti-stuck relocation, and lifecycle cleanup.
+- [src/main/kotlin/com/fome/exservermod/network/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/network/):
+  - [OpenRoulettePayload.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/network/OpenRoulettePayload.kt): Custom network payload and stream codec for client roulette triggers.
+- [src/main/kotlin/com/fome/exservermod/client/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/):
+  - [RouletteAnimation.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/RouletteAnimation.kt): Pure cubic deceleration function (`easeOutCubic`).
+  - [RouletteScreen.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/RouletteScreen.kt): Client GUI screen with slot spinning animation, click sounds on slot change, toast fanfare, and auto-close.
+  - [ExServerModClient.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/ExServerModClient.kt): Fabric client entrypoint receiving payloads and opening the roulette screen.
+- [src/main/kotlin/com/fome/exservermod/compat/bluemap/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/compat/bluemap/):
+  - [BlueMapCompat.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/compat/bluemap/BlueMapCompat.kt): Soft dependency wrapper with safe FabricLoader check.
+  - [BlueMapBridge.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/compat/bluemap/BlueMapBridge.kt): Isolated reflection bridge for player visibility on BlueMap.
 - [src/test/kotlin/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/):
   - [HideAndSeekGameTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/game/HideAndSeekGameTest.kt): Unit tests for game transitions, roles, and timers.
   - [LandmarkTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/landmarks/LandmarkTest.kt): Unit tests for perimeter distance calculation, closest search, and JSON persistence.
-  - [DisguiseTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/disguise/DisguiseTest.kt): Unit tests for 34 curated mob pool verification, exclusion of prohibited entities, scale math, and state tracking.
+  - [DisguiseTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/disguise/DisguiseTest.kt): Unit tests for mob pool, trait categorization, hint keys, ambient sound lookups, and scaling math.
+  - [RouletteTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/RouletteTest.kt): Unit tests for roulette animation and boundary math.
+  - [BlueMapCompatTest.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/test/kotlin/com/fome/exservermod/BlueMapCompatTest.kt): Unit tests for safe fallback when BlueMap is absent.
 
 ---
 
@@ -72,4 +83,15 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
   - Strict stealth invariant: only hider knows their disguise during hiding/seeking; revealed at intermission.
   - State tracking, cleanup on disconnect, intermission, idle, and server stop.
   - Comprehensive unit tests in `DisguiseTest.kt` verifying pool, categorization, timers, and scaling math.
-- [ ] **Task 5: Visual Roulette Screen & Client Animation**
+- [x] **Task 5: Visual Roulette Screen & Client Animation**
+  - Custom network payload `OpenRoulettePayload` and stream codec for client synchronization.
+  - Client mod initialization (`ExServerModClient`) registered in `fabric.mod.json`.
+  - Pure cubic deceleration function `RouletteAnimation.easeOutCubic`.
+  - `RouletteScreen` rendering via 26.2 `extractRenderState`, playing `UI_BUTTON_CLICK` on slot pass and `UI_TOAST_CHALLENGE_COMPLETE` on stop.
+  - Automatic trigger on game start and continuation in Mob mode.
+  - Unit tests in `RouletteTest.kt`.
+- [x] **Task 6: BlueMap Soft Integration & Stealth Invariant**
+  - Isolated reflection bridge (`BlueMapBridge`) avoiding any hard dependencies or class loading crashes.
+  - Safe loader check in `BlueMapCompat`.
+  - Player visibility hidden during `HIDING` and `SEEKING` phases; restored on `INTERMISSION`, `IDLE`, disconnect, leave, and server stop.
+  - Safe fallback unit tests in `BlueMapCompatTest.kt`.
