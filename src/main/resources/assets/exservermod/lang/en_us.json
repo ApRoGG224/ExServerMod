@@ -41,5 +41,9 @@
   "exservermod.landmarks.list_entry": "- %s: (x: %.1f, z: %.1f, radius: %.1f, dim: %s)",
   "exservermod.landmarks.list_empty": "[Landmarks] No landmarks have been registered yet.",
   "exservermod.landmarks.already_exists": "[Landmarks] Landmark '%s' already exists.",
-  "exservermod.landmarks.invalid_radius": "[Landmarks] Radius must be greater than 0."
+  "exservermod.landmarks.invalid_radius": "[Landmarks] Radius must be greater than 0.",
+  "exservermod.disguise.you_are_disguised": "[Games] You are disguised as %s!",
+  "exservermod.disguise.revealed": "[Games] Hider %s was disguised as %s!",
+  "exservermod.disguise.cleared": "[Games] Disguise cleared.",
+  "exservermod.disguise.anti_stuck_relocated": "[Games] Anti-stuck safeguard relocated you to a safe spot."
 }
