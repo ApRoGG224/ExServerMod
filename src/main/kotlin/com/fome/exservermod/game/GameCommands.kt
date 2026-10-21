@@ -1,5 +1,7 @@
 package com.fome.exservermod.game
 
+import com.fome.exservermod.disguise.DisguiseManager
+import com.fome.exservermod.disguise.MobPool
 import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.minecraft.ChatFormatting
@@ -12,6 +14,7 @@ import net.minecraft.server.level.ServerPlayer
 
 class GameCommands(
     private val game: HideAndSeekGame,
+    private val disguiseManager: DisguiseManager = DisguiseManager(),
 ) {
     fun register() {
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
@@ -189,6 +192,13 @@ class GameCommands(
                 )
             }
             is VoteResult.GameStarted -> {
+                if (result.mode == GameMode.MOB) {
+                    val hider = server.playerList.getPlayer(result.hiderUuid)
+                    if (hider != null) {
+                        disguiseManager.applyDisguise(hider, MobPool.getRandomMob())
+                    }
+                }
+
                 val hiderName =
                     server.playerList
                         .getPlayer(result.hiderUuid)
@@ -273,6 +283,13 @@ class GameCommands(
     ) {
         val continued = game.continueNextRound(player.uuid)
         if (continued) {
+            if (game.mode == GameMode.MOB) {
+                val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
+                if (hider != null) {
+                    disguiseManager.applyDisguise(hider, MobPool.getRandomMob())
+                }
+            }
+
             val hiderName =
                 game.hiderUuid?.let {
                     server.playerList
@@ -315,6 +332,7 @@ class GameCommands(
     ) {
         val left = game.leave(player.uuid)
         if (left) {
+            disguiseManager.clearAll(server)
             server.playerList.broadcastSystemMessage(
                 Component
                     .translatable("exservermod.game.cancelled", player.name.string)
