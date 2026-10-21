@@ -1,10 +1,13 @@
 package com.fome.exservermod.game
 
+import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.landmarks.LandmarkManager
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.minecraft.ChatFormatting
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
@@ -16,6 +19,7 @@ import kotlin.math.hypot
 class GameEventHandler(
     private val game: HideAndSeekGame,
     private val landmarks: LandmarkManager,
+    private val disguiseManager: DisguiseManager = DisguiseManager(),
 ) {
     companion object {
         const val HINT_INTERVAL_TICKS = 50 * HideAndSeekGame.TICKS_PER_SECOND // 50 seconds = 1000 ticks
@@ -31,6 +35,8 @@ class GameEventHandler(
         registerBlockBreakProtection()
         registerAttackHandler()
         registerServerTick()
+        registerDisconnect()
+        registerServerStopping()
     }
 
     private fun registerDamageProtection() {
@@ -88,6 +94,21 @@ class GameEventHandler(
                             }
                         level.server?.playerList?.broadcastSystemMessage(continueButton, false)
 
+                        if (game.mode == GameMode.MOB) {
+                            val disguise = disguiseManager.getDisguise(entity.uuid)
+                            if (disguise != null) {
+                                val revealMsg =
+                                    Component
+                                        .translatable(
+                                            "exservermod.disguise.revealed",
+                                            entity.name.string,
+                                            disguise.description,
+                                        ).withStyle(ChatFormatting.GOLD)
+                                level.server?.playerList?.broadcastSystemMessage(revealMsg, false)
+                            }
+                            disguiseManager.clearDisguise(entity)
+                        }
+
                         return@register InteractionResult.SUCCESS
                     }
                 }
@@ -125,6 +146,7 @@ class GameEventHandler(
                         }
                     }
                     GamePhase.IDLE -> {
+                        disguiseManager.clearAll(server)
                         hiderInitialX = null
                         hiderInitialZ = null
                         hasAlertedMovedTwentyBlocks = false
@@ -197,6 +219,14 @@ class GameEventHandler(
                 }
             }
 
+            // Anti-stuck safeguard for disguised hider
+            if (game.isGameActive() && game.mode == GameMode.MOB) {
+                val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
+                if (hider != null && disguiseManager.isDisguised(hider.uuid)) {
+                    disguiseManager.checkAntiStuck(hider)
+                }
+            }
+
             // Action bar countdown updates every second
             if (server.tickCount % HideAndSeekGame.TICKS_PER_SECOND == 0) {
                 if (game.phase == GamePhase.HIDING) {
@@ -217,6 +247,27 @@ class GameEventHandler(
                     game.seekerUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
                 }
             }
+        }
+    }
+
+    private fun registerDisconnect() {
+        ServerPlayConnectionEvents.DISCONNECT.register { handler, server ->
+            disguiseManager.clearDisguise(handler.player)
+            if (game.isParticipant(handler.player.uuid)) {
+                game.leave(handler.player.uuid)
+                server.playerList.broadcastSystemMessage(
+                    Component
+                        .translatable("exservermod.game.cancelled", handler.player.name.string)
+                        .withStyle(ChatFormatting.GRAY),
+                    false,
+                )
+            }
+        }
+    }
+
+    private fun registerServerStopping() {
+        ServerLifecycleEvents.SERVER_STOPPING.register { server ->
+            disguiseManager.clearAll(server)
         }
     }
 }
