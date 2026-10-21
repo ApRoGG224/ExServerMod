@@ -1,6 +1,7 @@
 package com.fome.exservermod.game
 
 import com.fome.exservermod.disguise.DisguiseManager
+import com.fome.exservermod.disguise.MobPool
 import com.fome.exservermod.landmarks.LandmarkManager
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -13,6 +14,7 @@ import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.sounds.SoundSource
 import net.minecraft.world.InteractionResult
 import kotlin.math.hypot
 
@@ -23,6 +25,8 @@ class GameEventHandler(
 ) {
     companion object {
         const val HINT_INTERVAL_TICKS = 50 * HideAndSeekGame.TICKS_PER_SECOND // 50 seconds = 1000 ticks
+        const val ACOUSTIC_TAUNT_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
+        const val INTELLECTUAL_HINT_INTERVAL_TICKS = 90 * HideAndSeekGame.TICKS_PER_SECOND // 90 seconds = 1800 ticks
         const val MOVEMENT_ALERT_DISTANCE = 20.0
     }
 
@@ -212,6 +216,37 @@ class GameEventHandler(
                                 Component
                                     .translatable("exservermod.landmarks.hint.closest", closest.name)
                                     .withStyle(ChatFormatting.AQUA),
+                                false,
+                            )
+                        }
+                    }
+                }
+
+                // Acoustic sound taunt (every 45 seconds = 900 ticks, radius 35-40 blocks)
+                if (game.mode == GameMode.MOB &&
+                    game.elapsedSeekingTicks > 0 &&
+                    game.elapsedSeekingTicks % ACOUSTIC_TAUNT_INTERVAL_TICKS == 0
+                ) {
+                    if (hider != null) {
+                        val mob = disguiseManager.getDisguise(hider.uuid)
+                        if (mob != null) {
+                            val sound = MobPool.getAmbientSound(mob)
+                            hider.level().playSound(null, hider.x, hider.y, hider.z, sound, SoundSource.NEUTRAL, 2.5f, 1.0f)
+                        }
+                    }
+                }
+
+                // Intellectual categorical hint (every 90 seconds = 1800 ticks)
+                if (game.mode == GameMode.MOB &&
+                    game.elapsedSeekingTicks > 0 &&
+                    game.elapsedSeekingTicks % INTELLECTUAL_HINT_INTERVAL_TICKS == 0
+                ) {
+                    if (hider != null) {
+                        val mob = disguiseManager.getDisguise(hider.uuid)
+                        if (mob != null) {
+                            val hint = MobPool.getRandomHint(mob)
+                            server.playerList.broadcastSystemMessage(
+                                hint.withStyle(ChatFormatting.LIGHT_PURPLE),
                                 false,
                             )
                         }
