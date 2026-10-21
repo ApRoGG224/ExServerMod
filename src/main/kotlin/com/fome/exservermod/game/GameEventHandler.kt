@@ -1,5 +1,6 @@
 package com.fome.exservermod.game
 
+import com.fome.exservermod.compat.bluemap.BlueMapCompat
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
 import com.fome.exservermod.landmarks.LandmarkManager
@@ -113,6 +114,8 @@ class GameEventHandler(
                             disguiseManager.clearDisguise(entity)
                         }
 
+                        BlueMapCompat.setPlayersVisibility(listOf(player.uuid, entity.uuid), true)
+
                         return@register InteractionResult.SUCCESS
                     }
                 }
@@ -127,6 +130,9 @@ class GameEventHandler(
             if (transition is TickResult.PhaseChanged) {
                 when (transition.newPhase) {
                     GamePhase.SEEKING -> {
+                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+                        BlueMapCompat.setPlayersVisibility(participants, false)
+
                         val seekerName =
                             game.seekerUuid?.let {
                                 server.playerList
@@ -149,7 +155,23 @@ class GameEventHandler(
                             hasAlertedMovedTwentyBlocks = false
                         }
                     }
+                    GamePhase.HIDING -> {
+                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+                        BlueMapCompat.setPlayersVisibility(participants, false)
+                        hiderInitialX = null
+                        hiderInitialZ = null
+                        hasAlertedMovedTwentyBlocks = false
+                    }
+                    GamePhase.INTERMISSION -> {
+                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+                        BlueMapCompat.setPlayersVisibility(participants, true)
+                        hiderInitialX = null
+                        hiderInitialZ = null
+                        hasAlertedMovedTwentyBlocks = false
+                    }
                     GamePhase.IDLE -> {
+                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+                        BlueMapCompat.setPlayersVisibility(participants, true)
                         disguiseManager.clearAll(server)
                         hiderInitialX = null
                         hiderInitialZ = null
@@ -161,7 +183,7 @@ class GameEventHandler(
                             false,
                         )
                     }
-                    GamePhase.HIDING, GamePhase.VOTING, GamePhase.INTERMISSION -> {
+                    GamePhase.VOTING -> {
                         hiderInitialX = null
                         hiderInitialZ = null
                         hasAlertedMovedTwentyBlocks = false
@@ -288,6 +310,7 @@ class GameEventHandler(
     private fun registerDisconnect() {
         ServerPlayConnectionEvents.DISCONNECT.register { handler, server ->
             disguiseManager.clearDisguise(handler.player)
+            BlueMapCompat.setPlayerVisibility(handler.player.uuid, true)
             if (game.isParticipant(handler.player.uuid)) {
                 game.leave(handler.player.uuid)
                 server.playerList.broadcastSystemMessage(
@@ -303,6 +326,8 @@ class GameEventHandler(
     private fun registerServerStopping() {
         ServerLifecycleEvents.SERVER_STOPPING.register { server ->
             disguiseManager.clearAll(server)
+            val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+            BlueMapCompat.setPlayersVisibility(participants, true)
         }
     }
 }
