@@ -1,5 +1,6 @@
 package com.fome.exservermod.game
 
+import com.fome.exservermod.compat.bluemap.BlueMapCompat
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
 import com.fome.exservermod.network.OpenRoulettePayload
@@ -209,6 +210,8 @@ class GameCommands(
                     }
                 }
 
+                BlueMapCompat.setPlayersVisibility(listOf(result.hiderUuid, result.seekerUuid), false)
+
                 val hiderName =
                     server.playerList
                         .getPlayer(result.hiderUuid)
@@ -334,6 +337,9 @@ class GameCommands(
                     .withStyle(ChatFormatting.GOLD),
                 false,
             )
+
+            val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+            BlueMapCompat.setPlayersVisibility(participants, false)
         } else {
             player.sendSystemMessage(
                 Component
@@ -347,9 +353,11 @@ class GameCommands(
         player: ServerPlayer,
         server: MinecraftServer,
     ) {
+        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid, player.uuid)
         val left = game.leave(player.uuid)
         if (left) {
             disguiseManager.clearAll(server)
+            BlueMapCompat.setPlayersVisibility(participants, true)
             server.playerList.broadcastSystemMessage(
                 Component
                     .translatable("exservermod.game.cancelled", player.name.string)
