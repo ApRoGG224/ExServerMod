@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Sensitive environment variables
+.env
+.env.*
+!.env.example
+
+# IDE & Editors
+.idea/
+*.iml
+.vscode/
+*.ipr
+*.iws
+
+# macOS / OS
+.DS_Store
+Thumbs.db
+
+# Minecraft run directory & logs
+run/
+*.log
