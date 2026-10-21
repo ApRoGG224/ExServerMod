@@ -1,6 +1,7 @@
 package com.fome.exservermod.disguise
 
 import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.MutableComponent
 import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.world.entity.EntityType
@@ -295,19 +296,17 @@ object MobPool {
             else -> Origin.OVERWORLD
         }
 
-    fun getLocomotion(entityType: EntityType<*>): Locomotion =
-        if (entityType in FLYING_MOBS) Locomotion.FLYING else Locomotion.TERRESTRIAL
+    fun getLocomotion(entityType: EntityType<*>): Locomotion = if (entityType in FLYING_MOBS) Locomotion.FLYING else Locomotion.TERRESTRIAL
 
     fun getDisposition(entityType: EntityType<*>): Disposition =
         if (entityType in PASSIVE_MOBS) Disposition.PASSIVE else Disposition.HOSTILE
 
-    fun getAmbientSound(entityType: EntityType<*>): SoundEvent =
-        AMBIENT_SOUNDS[entityType] ?: SoundEvents.ZOMBIE_AMBIENT
+    fun getAmbientSound(entityType: EntityType<*>): SoundEvent = AMBIENT_SOUNDS[entityType] ?: SoundEvents.ZOMBIE_AMBIENT
 
     fun getHint(
         entityType: EntityType<*>,
         category: HintCategory,
-    ): Component {
+    ): MutableComponent {
         val key =
             when (category) {
                 HintCategory.SIZE ->
@@ -340,7 +339,7 @@ object MobPool {
     fun getRandomHint(
         entityType: EntityType<*>,
         random: Random = Random,
-    ): Component {
+    ): MutableComponent {
         val category = HintCategory.entries[random.nextInt(HintCategory.entries.size)]
         return getHint(entityType, category)
     }
