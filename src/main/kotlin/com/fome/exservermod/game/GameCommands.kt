@@ -27,147 +27,159 @@ class GameCommands(
 ) {
     fun register() {
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
-            dispatcher.register(
-                Commands
-                    .literal("games")
-                    .executes { ctx ->
-                        val player = ctx.source.player
-                        if (player != null) {
-                            showGameStatus(player, ctx.source.server)
-                        }
-                        1
-                    }.then(
-                        Commands
-                            .literal("classic")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
-                                }
-                                1
-                            },
-                    ).then(
-                        Commands
-                            .literal("mob")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    handleStartMode(player, ctx.source.server, GameMode.MOB)
-                                }
-                                1
-                            },
-                    ).then(
-                        Commands
-                            .literal("start")
-                            .then(
-                                Commands
-                                    .literal("classic")
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
-                                        }
-                                        1
-                                    },
-                            ).then(
-                                Commands
-                                    .literal("mob")
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            handleStartMode(player, ctx.source.server, GameMode.MOB)
-                                        }
-                                        1
-                                    },
-                            ).then(
-                                Commands
-                                    .argument("mode", StringArgumentType.word())
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            val modeArg = StringArgumentType.getString(ctx, "mode").lowercase()
-                                            handleVoteOrStart(player, ctx.source.server, modeArg)
-                                        }
-                                        1
-                                    },
-                            ),
-                    ).then(
-                        Commands
-                            .literal("vote")
-                            .then(
-                                Commands
-                                    .literal("classic")
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
-                                        }
-                                        1
-                                    },
-                            ).then(
-                                Commands
-                                    .literal("mob")
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            handleStartMode(player, ctx.source.server, GameMode.MOB)
-                                        }
-                                        1
-                                    },
-                            ).then(
-                                Commands
-                                    .argument("mode", StringArgumentType.word())
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            val modeArg = StringArgumentType.getString(ctx, "mode").lowercase()
-                                            handleVoteOrStart(player, ctx.source.server, modeArg)
-                                        }
-                                        1
-                                    },
-                            ),
-                    ).then(
-                        Commands
-                            .literal("startsearch")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    handleStartSearch(player, ctx.source.server)
-                                }
-                                1
-                            },
-                    ).then(
-                        Commands
-                            .literal("continue")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    handleContinue(player, ctx.source.server)
-                                }
-                                1
-                            },
-                    ).then(
-                        Commands
-                            .literal("leave")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    handleLeave(player, ctx.source.server)
-                                }
-                                1
-                            },
-                    ).then(
-                        Commands
-                            .literal("hint")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    handleHint(player, ctx.source.server)
-                                }
-                                1
-                            },
-                    ),
-            )
+            val gamesNode =
+                dispatcher.register(
+                    Commands
+                        .literal("games")
+                        .executes { ctx ->
+                            val player = ctx.source.player
+                            if (player != null) {
+                                showGameStatus(player, ctx.source.server)
+                            }
+                            1
+                        }.then(
+                            Commands
+                                .literal("classic")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
+                                    }
+                                    1
+                                },
+                        ).then(
+                            Commands
+                                .literal("mob")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleStartMode(player, ctx.source.server, GameMode.MOB)
+                                    }
+                                    1
+                                },
+                        ).then(
+                            Commands
+                                .literal("start")
+                                .then(
+                                    Commands
+                                        .literal("classic")
+                                        .executes { ctx ->
+                                            val player = ctx.source.player
+                                            if (player != null) {
+                                                handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
+                                            }
+                                            1
+                                        },
+                                ).then(
+                                    Commands
+                                        .literal("mob")
+                                        .executes { ctx ->
+                                            val player = ctx.source.player
+                                            if (player != null) {
+                                                handleStartMode(player, ctx.source.server, GameMode.MOB)
+                                            }
+                                            1
+                                        },
+                                ).then(
+                                    Commands
+                                        .argument("mode", StringArgumentType.word())
+                                        .executes { ctx ->
+                                            val player = ctx.source.player
+                                            if (player != null) {
+                                                val modeArg = StringArgumentType.getString(ctx, "mode").lowercase()
+                                                handleVoteOrStart(player, ctx.source.server, modeArg)
+                                            }
+                                            1
+                                        },
+                                ),
+                        ).then(
+                            Commands
+                                .literal("vote")
+                                .then(
+                                    Commands
+                                        .literal("classic")
+                                        .executes { ctx ->
+                                            val player = ctx.source.player
+                                            if (player != null) {
+                                                handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
+                                            }
+                                            1
+                                        },
+                                ).then(
+                                    Commands
+                                        .literal("mob")
+                                        .executes { ctx ->
+                                            val player = ctx.source.player
+                                            if (player != null) {
+                                                handleStartMode(player, ctx.source.server, GameMode.MOB)
+                                            }
+                                            1
+                                        },
+                                ).then(
+                                    Commands
+                                        .argument("mode", StringArgumentType.word())
+                                        .executes { ctx ->
+                                            val player = ctx.source.player
+                                            if (player != null) {
+                                                val modeArg = StringArgumentType.getString(ctx, "mode").lowercase()
+                                                handleVoteOrStart(player, ctx.source.server, modeArg)
+                                            }
+                                            1
+                                        },
+                                ),
+                        ).then(
+                            Commands
+                                .literal("startsearch")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleStartSearch(player, ctx.source.server)
+                                    }
+                                    1
+                                },
+                        ).then(
+                            Commands
+                                .literal("continue")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleContinue(player, ctx.source.server)
+                                    }
+                                    1
+                                },
+                        ).then(
+                            Commands
+                                .literal("leave")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleLeave(player, ctx.source.server)
+                                    }
+                                    1
+                                },
+                        ).then(
+                            Commands
+                                .literal("hint")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleHint(player, ctx.source.server)
+                                    }
+                                    1
+                                },
+                        ).then(
+                            Commands
+                                .literal("unstuck")
+                                .executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        handleUnstuck(player)
+                                    }
+                                    1
+                                },
+                        ),
+                )
+            dispatcher.register(Commands.literal("game").redirect(gamesNode))
         }
     }
 
@@ -467,6 +479,12 @@ class GameCommands(
                     .withStyle(ChatFormatting.GOLD),
                 false,
             )
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.game.hiding_announcement", HideAndSeekGame.HIDING_DURATION_SECONDS)
+                    .withStyle(ChatFormatting.YELLOW),
+                false,
+            )
 
             val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
             BlueMapCompat.setPlayersVisibility(participants, false)
@@ -616,5 +634,19 @@ class GameCommands(
                     .withStyle(ChatFormatting.RED),
             )
         }
+    }
+
+    private fun handleUnstuck(player: ServerPlayer) {
+        if (!disguiseManager.isDisguised(player.uuid)) {
+            player.sendSystemMessage(
+                Component
+                    .translatable("exservermod.disguise.not_disguised")
+                    .withStyle(ChatFormatting.RED),
+            )
+            return
+        }
+
+        val isSeeking = game.phase == GamePhase.SEEKING
+        disguiseManager.unstuckPlayer(player, isAutomatic = false, isSeekingPhase = isSeeking)
     }
 }

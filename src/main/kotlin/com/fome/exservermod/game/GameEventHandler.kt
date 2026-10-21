@@ -48,12 +48,12 @@ class GameEventHandler(
         const val ACOUSTIC_TAUNT_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
         const val INTELLECTUAL_HINT_INTERVAL_TICKS = 90 * HideAndSeekGame.TICKS_PER_SECOND // 90 seconds = 1800 ticks
         const val DISTANCE_HINT_INTERVAL_TICKS = 180 * HideAndSeekGame.TICKS_PER_SECOND // 180 seconds = 3600 ticks
-        const val MOVEMENT_ALERT_DISTANCE = 20.0
+        const val MOVEMENT_ALERT_DISTANCE = 25.0
     }
 
     private var hiderInitialX: Double? = null
     private var hiderInitialZ: Double? = null
-    private var hasAlertedMovedTwentyBlocks: Boolean = false
+    private var hasAlertedMovedTwentyFiveBlocks: Boolean = false
 
     fun register() {
         registerDamageProtection()
@@ -97,7 +97,7 @@ class GameEventHandler(
                     if (caught) {
                         hiderInitialX = null
                         hiderInitialZ = null
-                        hasAlertedMovedTwentyBlocks = false
+                        hasAlertedMovedTwentyFiveBlocks = false
 
                         val seekerName = player.name.string
                         val hiderName = entity.name.string
@@ -118,7 +118,6 @@ class GameEventHandler(
                                     .translatable(
                                         "exservermod.game.subtitle.caught",
                                         timeFormatted,
-                                        hiderName,
                                     ).withStyle(ChatFormatting.GOLD),
                             )
 
@@ -226,22 +225,6 @@ class GameEventHandler(
 
                         val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
                         if (seeker != null) {
-                            val animPacket = ClientboundSetTitlesAnimationPacket(10, 60, 20)
-                            val titlePacket =
-                                ClientboundSetTitleTextPacket(
-                                    Component
-                                        .translatable(
-                                            "exservermod.game.title.seeking_started",
-                                        ).withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
-                                )
-                            val subtitlePacket =
-                                ClientboundSetSubtitleTextPacket(
-                                    Component.translatable("exservermod.game.subtitle.seeking_started").withStyle(ChatFormatting.YELLOW),
-                                )
-                            seeker.connection.send(animPacket)
-                            seeker.connection.send(titlePacket)
-                            seeker.connection.send(subtitlePacket)
-
                             val emergencyHintBtn =
                                 Component.translatable("exservermod.game.button.hint_emergency").withStyle { style ->
                                     style
@@ -262,12 +245,12 @@ class GameEventHandler(
                             false,
                         )
 
-                        // Record initial hider position for 20-block movement warning
+                        // Record initial hider position for 25-block movement warning
                         val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
                         if (hider != null) {
                             hiderInitialX = hider.x
                             hiderInitialZ = hider.z
-                            hasAlertedMovedTwentyBlocks = false
+                            hasAlertedMovedTwentyFiveBlocks = false
                         }
                     }
                     GamePhase.HIDING -> {
@@ -275,14 +258,15 @@ class GameEventHandler(
                         BlueMapCompat.setPlayersVisibility(participants, false)
                         hiderInitialX = null
                         hiderInitialZ = null
-                        hasAlertedMovedTwentyBlocks = false
+                        hasAlertedMovedTwentyFiveBlocks = false
+                        disguiseManager.resetUnstuckCounters()
                     }
                     GamePhase.INTERMISSION -> {
                         val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
                         BlueMapCompat.setPlayersVisibility(participants, true)
                         hiderInitialX = null
                         hiderInitialZ = null
-                        hasAlertedMovedTwentyBlocks = false
+                        hasAlertedMovedTwentyFiveBlocks = false
                     }
                     GamePhase.IDLE -> {
                         val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
@@ -290,7 +274,7 @@ class GameEventHandler(
                         disguiseManager.clearAll(server)
                         hiderInitialX = null
                         hiderInitialZ = null
-                        hasAlertedMovedTwentyBlocks = false
+                        hasAlertedMovedTwentyFiveBlocks = false
                         server.playerList.broadcastSystemMessage(
                             Component
                                 .translatable("exservermod.game.reset_idle")
@@ -301,7 +285,7 @@ class GameEventHandler(
                     GamePhase.VOTING -> {
                         hiderInitialX = null
                         hiderInitialZ = null
-                        hasAlertedMovedTwentyBlocks = false
+                        hasAlertedMovedTwentyFiveBlocks = false
                     }
                 }
             }
@@ -320,20 +304,69 @@ class GameEventHandler(
                     )
                 }
 
-                // 20-block movement alert from starting hiding spot
-                if (hider != null && !hasAlertedMovedTwentyBlocks) {
+                // 25-block movement alert from starting hiding spot
+                if (hider != null && !hasAlertedMovedTwentyFiveBlocks) {
                     val startX = hiderInitialX
                     val startZ = hiderInitialZ
                     if (startX != null && startZ != null) {
                         val distance = hypot(hider.x - startX, hider.z - startZ)
                         if (distance > MOVEMENT_ALERT_DISTANCE) {
-                            hasAlertedMovedTwentyBlocks = true
+                            hasAlertedMovedTwentyFiveBlocks = true
                             server.playerList.broadcastSystemMessage(
                                 Component
-                                    .translatable("exservermod.hideandseek.alert.moved_twenty_blocks")
-                                    .withStyle(ChatFormatting.GOLD),
+                                    .translatable("exservermod.hideandseek.alert.moved_twenty_five_blocks")
+                                    .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
                                 false,
                             )
+
+                            val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
+                            if (seeker != null) {
+                                if (seeker.level().dimension() != hider.level().dimension()) {
+                                    server.playerList.broadcastSystemMessage(
+                                        Component
+                                            .translatable("exservermod.hideandseek.hint.distance_diff_dimension")
+                                            .withStyle(ChatFormatting.YELLOW),
+                                        false,
+                                    )
+                                } else {
+                                    val distBlocks = hypot(hider.x - seeker.x, hider.z - seeker.z).toInt()
+                                    server.playerList.broadcastSystemMessage(
+                                        Component
+                                            .translatable("exservermod.hideandseek.hint.seeker_distance", distBlocks)
+                                            .withStyle(ChatFormatting.YELLOW),
+                                        false,
+                                    )
+                                }
+                            }
+
+                            val dim =
+                                hider
+                                    .level()
+                                    .dimension()
+                                    .identifier()
+                                    .toString()
+                            val closest = landmarks.findClosest(hider.x, hider.z, dim)
+                            if (closest != null) {
+                                val landmarkDist = hypot(hider.x - closest.x, hider.z - closest.z).toInt()
+                                server.playerList.broadcastSystemMessage(
+                                    Component
+                                        .translatable(
+                                            "exservermod.hideandseek.hint.closest_landmark",
+                                            closest.name,
+                                            landmarkDist,
+                                        ).withStyle(ChatFormatting.AQUA),
+                                    false,
+                                )
+                            } else {
+                                server.playerList.broadcastSystemMessage(
+                                    Component
+                                        .translatable("exservermod.hideandseek.hint.no_landmarks")
+                                        .withStyle(ChatFormatting.GRAY),
+                                    false,
+                                )
+                            }
+
+                            playSoundToParticipants(server, SoundEvents.BELL_BLOCK, 1.2f, 1.0f)
                         }
                     }
                 }
@@ -420,15 +453,30 @@ class GameEventHandler(
                 }
             }
 
-            // Anti-stuck safeguard for disguised hider
-            if (game.isGameActive() && game.mode == GameMode.MOB) {
+            // Anti-stuck reminder for disguised hider
+            if (game.isGameActive() && game.mode == GameMode.MOB && server.tickCount % 40 == 0) {
                 val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
-                if (hider != null && disguiseManager.isDisguised(hider.uuid)) {
-                    disguiseManager.checkAntiStuck(hider)
+                if (hider != null && disguiseManager.isDisguised(hider.uuid) && disguiseManager.isPlayerStuck(hider)) {
+                    val unstuckBtn =
+                        Component.translatable("exservermod.disguise.button.unstuck").withStyle { style ->
+                            style
+                                .withColor(ChatFormatting.AQUA)
+                                .withClickEvent(ClickEvent.RunCommand("/games unstuck"))
+                                .withHoverEvent(
+                                    HoverEvent.ShowText(Component.translatable("exservermod.disguise.button.unstuck.hover")),
+                                )
+                        }
+                    hider.sendSystemMessage(
+                        Component
+                            .translatable("exservermod.disguise.stuck_reminder")
+                            .withStyle(ChatFormatting.RED)
+                            .append(" ")
+                            .append(unstuckBtn),
+                    )
                 }
             }
 
-            // Action bar countdown & ticking sounds every second
+            // Action bar countdown & seeking timer every second
             if (server.tickCount % HideAndSeekGame.TICKS_PER_SECOND == 0) {
                 if (game.phase == GamePhase.HIDING) {
                     val secondsLeft = game.remainingTicks / HideAndSeekGame.TICKS_PER_SECOND
@@ -444,11 +492,36 @@ class GameEventHandler(
                         val pitch = 0.6f + (10 - secondsLeft) * 0.14f
                         playSoundToParticipants(server, SoundEvents.NOTE_BLOCK_PLING, 1.0f, pitch)
                     }
-                } else if (game.phase == GamePhase.INTERMISSION) {
-                    val secondsLeft = game.remainingTicks / HideAndSeekGame.TICKS_PER_SECOND
+                } else if (game.phase == GamePhase.SEEKING) {
+                    val elapsedSeconds = game.elapsedSeekingTicks / HideAndSeekGame.TICKS_PER_SECOND
+                    val minutes = elapsedSeconds / 60
+                    val seconds = elapsedSeconds % 60
+                    val timeFormatted = String.format("%02d:%02d", minutes, seconds)
+                    val seekerName =
+                        game.seekerUuid?.let {
+                            server.playerList
+                                .getPlayer(it)
+                                ?.name
+                                ?.string
+                        } ?: "Искатель"
                     val msg =
                         Component
-                            .translatable("exservermod.game.actionbar.intermission", secondsLeft)
+                            .translatable("exservermod.game.actionbar.seeking", timeFormatted, seekerName)
+                            .withStyle(ChatFormatting.GOLD)
+                    game.hiderUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
+                    game.seekerUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
+                } else if (game.phase == GamePhase.INTERMISSION) {
+                    val secondsLeft = game.remainingTicks / HideAndSeekGame.TICKS_PER_SECOND
+                    val nextHiderName =
+                        game.seekerUuid?.let {
+                            server.playerList
+                                .getPlayer(it)
+                                ?.name
+                                ?.string
+                        } ?: "Прячущийся"
+                    val msg =
+                        Component
+                            .translatable("exservermod.game.actionbar.intermission", nextHiderName, secondsLeft)
                             .withStyle(ChatFormatting.AQUA)
                     game.hiderUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
                     game.seekerUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }

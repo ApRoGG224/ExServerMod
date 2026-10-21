@@ -252,4 +252,13 @@ class DisguiseTest {
         ClientDisguiseHolder.clear()
         assertFalse(ClientDisguiseHolder.isDisguised(player))
     }
+
+    @Test
+    fun `test unstuck counter resets and constants`() {
+        assertEquals(20_000L, DisguiseManager.UNSTUCK_COOLDOWN_MS)
+        assertEquals(3, DisguiseManager.MAX_UNSTUCK_PER_ROUND)
+
+        val manager = DisguiseManager()
+        manager.resetUnstuckCounters()
+    }
 }
