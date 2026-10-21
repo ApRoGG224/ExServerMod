@@ -10,16 +10,15 @@ It features a state machine, voting, custom phase timers, complete damage immuni
 
 ```mermaid
 flowchart TD
-    IDLE["IDLE (Standby)"] -->|/games vote| VOTING["VOTING Phase"]
-    VOTING -->|2 votes for Classic| HIDING_CLASSIC["HIDING Phase (Classic)"]
-    VOTING -->|2 votes for Mob Mode| HIDING_MOB["HIDING Phase (Mob Mode)"]
-    VOTING -->|Cancel / Timeout| IDLE
+    IDLE["IDLE (Standby)"] -->|/games or /games classic| HIDING_CLASSIC["HIDING Phase (Classic)"]
+    IDLE -->|/games or /games mob| HIDING_MOB["HIDING Phase (Mob Mode)"]
+    IDLE -->|/games leave| IDLE
 
     HIDING_CLASSIC -->|120s timer / Early start| SEEKING["SEEKING Phase"]
     HIDING_MOB -->|120s timer / Early start| SEEKING
     HIDING_MOB -->|Opens roulette screen| ROULETTE["Visual Roulette Spin"]
 
-    SEEKING -->|Seeker hits Hider| INTERMISSION["INTERMISSION (Results)"]
+    SEEKING -->|Seeker hits Hider| INTERMISSION["INTERMISSION (Results & Fireworks)"]
     SEEKING -->|/games leave| IDLE
 
     INTERMISSION -->|Click Continue| SWAP_ROLES["Swap Roles & Next Round"]
@@ -29,23 +28,32 @@ flowchart TD
 
 ### Phase Details:
 1. **`IDLE`**: No game active. Scoreboard clean.
-2. **`VOTING`**: Initiated via `/games`. Interactive chat buttons for `Classic` or `Mob Disguise`. Requires both players to vote for the same mode.
+2. **Instant Start (`VOTING`/`IDLE`)**: Initiated via `/games`. Interactive chat buttons `[ Классика ]` (`/games classic`) and `[ Маскировка мобом ]` (`/games mob`). If 2 or more players are online, choosing a mode starts the game **immediately** without waiting for a second vote.
 3. **`HIDING`** (120 seconds):
    - **Elytra**: Allowed for the Hider to reach high/distant spots.
-   - **Action Bar**: Displays countdown timer.
-   - **Early Start**: `[Start Search Early]` button in chat allows ending prep early if ready.
-   - **Mob Mode**: Hider triggers/receives visual roulette spin, receives mob disguise and scaled hitbox.
+   - **Action Bar**: Displays real-time countdown timer.
+   - **Audio Cue**: Last 10 seconds feature a ticking note block countdown with rising pitch (0.6 -> 1.86).
+   - **Early Start**: `[ ▶ Начать поиск раньше ]` (`/games startsearch`) button in chat allows ending prep early.
+   - **Cancel Game**: `[ ✖ Закончить игру ]` (`/games leave`) aborts the round and resets to idle.
+   - **Mob Mode**: Hider triggers/receives visual roulette spin (`RouletteScreen`), receives native mob disguise via packet interception, and scaled hitbox.
 4. **`SEEKING`** (Hunting phase):
+   - **Start Fanfare**: Raid horn sound (`RAID_HORN`), title `ОХОТА НАЧАЛАСЬ!` and emergency hint button to seeker.
    - **Elytra Invariant**: Hider is strictly forbidden from using Elytra (`stopFallFlying()`). Seeker is allowed to fly.
    - **Block Breaking**: Strictly cancelled for both players (`PlayerBlockBreakEvents.BEFORE`).
    - **Immortality**: Both players are immune to all damage (`ServerLivingEntityEvents.ALLOW_DAMAGE`).
    - **Hit Detection**: Seeker landing a hit on the Hider concludes the round (`AttackEntityCallback`).
    - **20-Block Warning**: If Hider strays >20 blocks from their hiding spot, a chat alert is broadcast.
-   - **Proximity Hints**: Every 45–60 seconds, broadcasts which landmark the hider is closest to.
+   - **Multi-Tier Hints**:
+     - *Distance hint (every 3 minutes)*: Discrete tiers 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, +5 blocks. Dimension-aware.
+     - *Emergency hint (`/games hint`)*: 1 per 5 minutes for seeker (non-repeating trait clues).
+     - *Acoustic taunt (every 45 seconds)*: Disguised mob ambient sound audible within 35-40 blocks.
+     - *Categorical hint (every 90 seconds)*: Trait clue broadcast to chat.
+     - *Landmark proximity (every 50 seconds)*: Nearest registered build.
 5. **`INTERMISSION`** (60 seconds auto-reset):
-   - Announces winner and elapsed time.
-   - Disguise and effects cleared.
-   - Interactive buttons: `[ Continue Next Round ]` (swaps roles) or `[ End Game ]`.
+   - Large on-screen title `ПОЙМАН!` with elapsed time (`mm:ss`) and next seeker name.
+   - Celebration fireworks over seeker, level-up and challenge complete sound effects.
+   - Disguise cleared and true identity revealed.
+   - Interactive buttons: `[ ▶ Следующий раунд ]` (swaps roles and restarts) or `[ ✖ Выйти из игры ]`.
 
 ---
 
@@ -88,7 +96,19 @@ To balance hiding as tiny, flying, or exotic mobs without spoiling the mystery, 
     - *Peaceful / Passive*: Farm animals, bats, allays.
     - *Hostile / Predator*: Monsters and bosses.
 
-### 4.3 Landmark Proximity Hints (Every 50 seconds / 1000 ticks)
+### 4.3 Periodic Distance Hint (Every 3 minutes / 3600 ticks)
+- Broadcasts discrete 3D distance from seeker to hider:
+  - Close proximity: `~1 block` (within 3 blocks).
+  - Standard tiers: `~5`, `~10`, `~15`, `~20`, `~25`, `~30`, `~35`, `~40`, `~45`, `~50` blocks.
+  - Long range: Increments of +5 blocks (`~55`, `~60`, `~65`, etc.).
+  - Cross-dimension awareness: If seeker and hider are in different dimensions, alerts that the hider is in another dimension instead of displaying invalid coordinates.
+  - Accompanied by subtle chime (`SoundEvents.EXPERIENCE_ORB_PICKUP`).
+
+### 4.4 Seeker Emergency Hint (`/games hint`, 1 per 5 minutes)
+- Available on demand to the seeker with a 300-second (5 min) cooldown.
+- Non-repeating categorical clues.
+
+### 4.5 Landmark Proximity Hints (Every 50 seconds / 1000 ticks)
 - Broadcasts horizontal distance comparison: *"Out of all builds, the hider is closest to: <Landmark>"*.
 - Alert on 20-block relocation: Triggered once if the hider strays >20 blocks from their hiding spot.
 
@@ -96,6 +116,7 @@ To balance hiding as tiny, flying, or exotic mobs without spoiling the mystery, 
 
 ## 5. Visual Roulette Wheel (`RouletteScreen`)
 - Client-side custom screen (`Screen`) opening during mob selection.
+- 3D entity models rendered in cards with dynamic bounding box scaling (`18.0f / max(bbWidth, bbHeight)`).
 - Spinning tape of mob icons with smooth easing (`easeOutCubic`).
 - Audio feedback: tick clicks (`UI_BUTTON_CLICK`) on passing icons.
 - Visual finish: stop animation, camera shake, particle flare, fanfare sound.
@@ -103,9 +124,9 @@ To balance hiding as tiny, flying, or exotic mobs without spoiling the mystery, 
 ---
 
 ## 6. Landmark Proximity System
-- Persistent storage: `config/landmarks.json`.
+- Persistent storage: `config/exservermod/landmarks.json`.
 - Commands:
-  - `/location-add <radius> <name>` (radius defaults to 50, Y spans -64..1000).
+  - `/location-add [radius] <name>` (radius defaults to 50, Y spans -64..1000).
   - `/location-remove <name>`
   - `/location-list`
 - During seeking phase, computes 2D horizontal distance to all landmark cylinder perimeters.
@@ -113,12 +134,14 @@ To balance hiding as tiny, flying, or exotic mobs without spoiling the mystery, 
 
 ---
 
-## 7. Commands Reference
-- `/games` — check status or start voting.
-- `/games vote <classic|mob>` — vote for sub-mode.
+## 7. Commands Reference & Operational Guide
+- `/games` — check status or show mode start buttons.
+- `/games classic` / `/games mob` — start immediately in selected mode.
 - `/games startsearch` — start hunting phase early.
+- `/games hint` — request emergency hint (seeker only, 5 min cooldown).
 - `/games continue` — advance to next round with swapped roles.
 - `/games leave` — abort and reset game state.
+- Full operational troubleshooting and invariants are documented in [docs/combat-rules-and-troubleshooting.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/combat-rules-and-troubleshooting.md).
 
 ---
 

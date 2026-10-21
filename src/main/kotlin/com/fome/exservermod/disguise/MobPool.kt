@@ -6,7 +6,6 @@ import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.EntityTypes
-import kotlin.math.max
 import kotlin.random.Random
 
 enum class SizeClass {
@@ -135,16 +134,52 @@ object MobPool {
             EntityTypes.WANDERING_TRADER,
         )
 
-    val AMBIENT_SOUNDS: Map<EntityType<*>, SoundEvent> =
+    val AMBIENT_SOUNDS: Map<EntityType<*>, SoundEvent> by lazy {
+        val cowSound =
+            SoundEvents.COW_SOUNDS.values
+                .first()
+                .ambientSound()
+                .value()
+        val pigSound =
+            SoundEvents.PIG_SOUNDS.values
+                .first()
+                .adultSounds()
+                .ambientSound()
+                .value()
+        val chickenSound =
+            SoundEvents.CHICKEN_SOUNDS.values
+                .first()
+                .adultSounds()
+                .ambientSound()
+                .value()
+        val catSound =
+            SoundEvents.CAT_SOUNDS.values
+                .first()
+                .adultSounds()
+                .ambientSound()
+                .value()
+        val wolfSound =
+            SoundEvents.WOLF_SOUNDS.values
+                .first()
+                .adultSounds()
+                .ambientSound()
+                .value()
+
         mapOf(
             EntityTypes.ALLAY to SoundEvents.ALLAY_AMBIENT_WITHOUT_ITEM,
             EntityTypes.ARMADILLO to SoundEvents.ARMADILLO_AMBIENT,
+            EntityTypes.AXOLOTL to SoundEvents.AXOLOTL_IDLE_AIR,
             EntityTypes.BAT to SoundEvents.BAT_AMBIENT,
             EntityTypes.BEE to SoundEvents.BEE_LOOP,
             EntityTypes.BLAZE to SoundEvents.BLAZE_AMBIENT,
             EntityTypes.BOGGED to SoundEvents.BOGGED_AMBIENT,
+            EntityTypes.BREEZE to SoundEvents.BREEZE_IDLE_GROUND,
             EntityTypes.CAMEL to SoundEvents.CAMEL_AMBIENT,
+            EntityTypes.CAT to catSound,
             EntityTypes.CAVE_SPIDER to SoundEvents.SPIDER_AMBIENT,
+            EntityTypes.CHICKEN to chickenSound,
+            EntityTypes.COD to SoundEvents.COD_FLOP,
+            EntityTypes.COW to cowSound,
             EntityTypes.CREAKING to SoundEvents.CREAKING_AMBIENT,
             EntityTypes.CREEPER to SoundEvents.CREEPER_PRIMED,
             EntityTypes.DOLPHIN to SoundEvents.DOLPHIN_AMBIENT,
@@ -154,36 +189,68 @@ object MobPool {
             EntityTypes.ENDER_DRAGON to SoundEvents.ENDER_DRAGON_AMBIENT,
             EntityTypes.ENDERMAN to SoundEvents.ENDERMAN_AMBIENT,
             EntityTypes.ENDERMITE to SoundEvents.ENDERMITE_AMBIENT,
+            EntityTypes.EVOKER to SoundEvents.EVOKER_AMBIENT,
+            EntityTypes.FOX to SoundEvents.FOX_AMBIENT,
             EntityTypes.FROG to SoundEvents.FROG_AMBIENT,
             EntityTypes.GHAST to SoundEvents.GHAST_AMBIENT,
+            EntityTypes.GIANT to SoundEvents.ZOMBIE_AMBIENT,
+            EntityTypes.GLOW_SQUID to SoundEvents.GLOW_SQUID_AMBIENT,
             EntityTypes.GOAT to SoundEvents.GOAT_AMBIENT,
             EntityTypes.GUARDIAN to SoundEvents.GUARDIAN_AMBIENT,
             EntityTypes.HOGLIN to SoundEvents.HOGLIN_AMBIENT,
+            EntityTypes.HORSE to SoundEvents.HORSE_AMBIENT,
             EntityTypes.HUSK to SoundEvents.HUSK_AMBIENT,
-            EntityTypes.MAGMA_CUBE to SoundEvents.SLIME_SQUISH,
-            EntityTypes.MULE to SoundEvents.DONKEY_AMBIENT,
+            EntityTypes.ILLUSIONER to SoundEvents.ILLUSIONER_AMBIENT,
+            EntityTypes.IRON_GOLEM to SoundEvents.IRON_GOLEM_REPAIR,
+            EntityTypes.LLAMA to SoundEvents.LLAMA_AMBIENT,
+            EntityTypes.MAGMA_CUBE to SoundEvents.MAGMA_CUBE_SQUISH,
+            EntityTypes.MOOSHROOM to cowSound,
+            EntityTypes.MULE to SoundEvents.MULE_AMBIENT,
+            EntityTypes.OCELOT to SoundEvents.OCELOT_AMBIENT,
+            EntityTypes.PANDA to SoundEvents.PANDA_AMBIENT,
+            EntityTypes.PARROT to SoundEvents.PARROT_AMBIENT,
             EntityTypes.PHANTOM to SoundEvents.PHANTOM_AMBIENT,
+            EntityTypes.PIG to pigSound,
             EntityTypes.PIGLIN to SoundEvents.PIGLIN_AMBIENT,
-            EntityTypes.PIGLIN_BRUTE to SoundEvents.PIGLIN_AMBIENT,
+            EntityTypes.PIGLIN_BRUTE to SoundEvents.PIGLIN_BRUTE_AMBIENT,
+            EntityTypes.PILLAGER to SoundEvents.PILLAGER_AMBIENT,
+            EntityTypes.POLAR_BEAR to SoundEvents.POLAR_BEAR_AMBIENT,
+            EntityTypes.PUFFERFISH to SoundEvents.PUFFER_FISH_BLOW_UP,
+            EntityTypes.RABBIT to SoundEvents.RABBIT_AMBIENT,
+            EntityTypes.RAVAGER to SoundEvents.RAVAGER_AMBIENT,
+            EntityTypes.SALMON to SoundEvents.SALMON_FLOP,
             EntityTypes.SHEEP to SoundEvents.SHEEP_AMBIENT,
             EntityTypes.SHULKER to SoundEvents.SHULKER_AMBIENT,
             EntityTypes.SILVERFISH to SoundEvents.SILVERFISH_AMBIENT,
             EntityTypes.SKELETON to SoundEvents.SKELETON_AMBIENT,
+            EntityTypes.SKELETON_HORSE to SoundEvents.SKELETON_HORSE_AMBIENT,
             EntityTypes.SLIME to SoundEvents.SLIME_SQUISH,
+            EntityTypes.SNIFFER to SoundEvents.SNIFFER_IDLE,
+            EntityTypes.SNOW_GOLEM to SoundEvents.SNOW_GOLEM_AMBIENT,
             EntityTypes.SPIDER to SoundEvents.SPIDER_AMBIENT,
+            EntityTypes.SQUID to SoundEvents.SQUID_AMBIENT,
             EntityTypes.STRAY to SoundEvents.STRAY_AMBIENT,
             EntityTypes.STRIDER to SoundEvents.STRIDER_AMBIENT,
+            EntityTypes.TADPOLE to SoundEvents.TADPOLE_FLOP,
+            EntityTypes.TRADER_LLAMA to SoundEvents.LLAMA_AMBIENT,
+            EntityTypes.TROPICAL_FISH to SoundEvents.TROPICAL_FISH_FLOP,
+            EntityTypes.TURTLE to SoundEvents.TURTLE_AMBIENT_LAND,
             EntityTypes.VEX to SoundEvents.VEX_AMBIENT,
             EntityTypes.VILLAGER to SoundEvents.VILLAGER_AMBIENT,
+            EntityTypes.VINDICATOR to SoundEvents.VINDICATOR_AMBIENT,
+            EntityTypes.WANDERING_TRADER to SoundEvents.WANDERING_TRADER_AMBIENT,
             EntityTypes.WARDEN to SoundEvents.WARDEN_AMBIENT,
             EntityTypes.WITCH to SoundEvents.WITCH_AMBIENT,
             EntityTypes.WITHER to SoundEvents.WITHER_AMBIENT,
             EntityTypes.WITHER_SKELETON to SoundEvents.WITHER_SKELETON_AMBIENT,
+            EntityTypes.WOLF to wolfSound,
             EntityTypes.ZOGLIN to SoundEvents.ZOGLIN_AMBIENT,
             EntityTypes.ZOMBIE to SoundEvents.ZOMBIE_AMBIENT,
+            EntityTypes.ZOMBIE_HORSE to SoundEvents.ZOMBIE_HORSE_AMBIENT,
             EntityTypes.ZOMBIE_VILLAGER to SoundEvents.ZOMBIE_VILLAGER_AMBIENT,
             EntityTypes.ZOMBIFIED_PIGLIN to SoundEvents.ZOMBIFIED_PIGLIN_AMBIENT,
         )
+    }
 
     val POOL: List<EntityType<*>> =
         listOf(
@@ -277,9 +344,9 @@ object MobPool {
     fun calculateScale(
         mobWidth: Float,
         mobHeight: Float,
-    ): Double = max(mobWidth / 0.6f, mobHeight / 1.8f).toDouble()
+    ): Double = 1.0
 
-    fun calculateScale(entityType: EntityType<*>): Double = calculateScale(entityType.width, entityType.height)
+    fun calculateScale(entityType: EntityType<*>): Double = 1.0
 
     fun getSizeClass(entityType: EntityType<*>): SizeClass =
         when {
@@ -342,5 +409,15 @@ object MobPool {
     ): MutableComponent {
         val category = HintCategory.entries[random.nextInt(HintCategory.entries.size)]
         return getHint(entityType, category)
+    }
+
+    fun getNextHint(
+        entityType: EntityType<*>,
+        lastCategory: HintCategory?,
+        random: Random = Random,
+    ): Pair<MutableComponent, HintCategory> {
+        val candidates = HintCategory.entries.filter { it != lastCategory }
+        val category = candidates[random.nextInt(candidates.size)]
+        return getHint(entityType, category) to category
     }
 }

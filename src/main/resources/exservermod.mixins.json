@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.fome.exservermod.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "EntityDimensionsMixin",
+    "ServerEntityMixin",
+    "WalkAnimationStateAccessor"
+  ],
+  "client": [
+    "ClientEntityRenderDispatcherMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

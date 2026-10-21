@@ -20,3 +20,14 @@
 ## 4. Anti-Cheat & Exploit Prevention
 - All state changes, cooldowns, and ability validations must run on the dedicated server side.
 - No client-authoritative checks or mechanics.
+
+## 5. Stealth & Minigame Invariants
+- **Elytra Aerial Rule**:
+  - `HIDING` phase: Hider may use Elytra to reach remote vantage points.
+  - `SEEKING` phase: Hider is strictly barred from Elytra flight (`stopFallFlying()`). Seeker may fly freely.
+- **Block Protection**: Both participants are blocked from breaking blocks during active minigame phases.
+- **Damage Immunity**: Full PvP damage immunity between players until the conclusion hit.
+- **Stealth Preservation**:
+  - Players are hidden from BlueMap dynamically during hiding and seeking phases.
+  - Disguises use entity packet replacement without invisibility effects to prevent player ghosting or rendering bugs.
+- **Operational Reference**: Full details in [docs/combat-rules-and-troubleshooting.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/combat-rules-and-troubleshooting.md).

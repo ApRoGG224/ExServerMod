@@ -10,12 +10,16 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
 
 ## Implemented Components
 - [AGENT.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/AGENT.md): Root guidelines, command reference, strict i18n rule, and constraints.
+- [docs/combat-rules-and-troubleshooting.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/combat-rules-and-troubleshooting.md): Operational guide, combat invariants, battle-tested mechanics, and troubleshooting post-mortem.
 - [docs/features/hide-and-seek.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/features/hide-and-seek.md): Complete game design specification for Hide & Seek, Mob Mode, Roulette Wheel, Landmarks, and BlueMap stealth integration.
 - [docs/development-and-testing.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/development-and-testing.md): Fast local testing guide (sandbox `runClient`, Hot-Reload, JUnit 5).
 - [docs/architecture.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/architecture.md): Architecture, language exclusivity (Kotlin), and deployment specs.
 - [docs/gameplay-rules.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/gameplay-rules.md): Gameplay invariants (zero griefing, no teleportation, anti-stuck only).
-- [docs/decisions/0003-strict-i18n-localization.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n-localization.md): ADR 0003 enforcing strict `Component.translatable` for all user-facing strings.
-- [src/main/resources/assets/exservermod/lang/en_us.json](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/resources/assets/exservermod/lang/en_us.json): Comprehensive central translation catalog for game, landmark, disguise hints, and roulette messages.
+- [docs/decisions/0003-strict-i18n-localization.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n-localization.md): ADR 0003 enforcing strict `Component.translatable` for all user-facing strings with Russian as default.
+- [src/main/resources/assets/exservermod/lang/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/resources/assets/exservermod/lang/):
+  - `en_us.json`: Primary default language catalog (Russian text out of the box for fallback).
+  - `ru_ru.json`: Complete Russian language translation file.
+  - `en_backup.json`: Preserved English translation file for Telegram bot multi-language switching.
 - [Taskfile.yml](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/Taskfile.yml): Task pipeline (`task pre-commit`, `task test`, `task build`, `task deploy`).
 - [scripts/bump_version.py](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/scripts/bump_version.py): Version bumper.
 - [scripts/deploy_exaroton.py](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/scripts/deploy_exaroton.py): Exaroton REST deployer.
@@ -34,7 +38,11 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
   - [DisguiseManager.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/disguise/DisguiseManager.kt): Mob disguise engine managing hitbox scale (`Attributes.SCALE`), infinite particle-free invisibility, environmental immunity for aquatics, safe anti-stuck relocation, and lifecycle cleanup.
 - [src/main/kotlin/com/fome/exservermod/network/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/network/):
   - [OpenRoulettePayload.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/network/OpenRoulettePayload.kt): Custom network payload and stream codec for client roulette triggers.
+- [src/main/java/com/fome/exservermod/mixin/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/java/com/fome/exservermod/mixin/):
+  - [ServerEntityMixin.java](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/java/com/fome/exservermod/mixin/disguise/ServerEntityMixin.java): Server packet interception replacing entity spawn packets with disguise mob type for remote players natively.
+  - [EntityDimensionsMixin.java](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/java/com/fome/exservermod/mixin/disguise/EntityDimensionsMixin.java): Hitbox and eye-height dimension scaling hook.
 - [src/main/kotlin/com/fome/exservermod/client/](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/):
+  - [ClientDisguiseHolder.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/ClientDisguiseHolder.kt): Client-side 3D disguise renderer and state holder synchronizing interpolation, walk animation, crouching, and equipment without jitter.
   - [RouletteAnimation.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/RouletteAnimation.kt): Pure cubic deceleration function (`easeOutCubic`).
   - [RouletteScreen.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/RouletteScreen.kt): Client GUI screen with slot spinning animation, click sounds on slot change, toast fanfare, and auto-close.
   - [ExServerModClient.kt](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/src/main/kotlin/com/fome/exservermod/client/ExServerModClient.kt): Fabric client entrypoint receiving payloads and opening the roulette screen.

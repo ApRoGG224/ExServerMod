@@ -50,3 +50,12 @@ Before any commit or deployment, run:
 task pre-commit
 ```
 Runs both `task lint` (ktlint style check) and `task test`. Must finish with 0 errors.
+
+---
+
+## 5. Production Pitfalls & Combat Solutions (Troubleshooting)
+Key operational lessons from real deployments:
+- **BlueMap Resource Download**: BlueMap fails to load unless `accept-download: true` is explicitly configured in `/server/config/bluemap/core.conf`.
+- **Command Clicks in Modern Minecraft**: When using clickable text components in chat, modern Minecraft clients verify commands through `restrictedSuggestionsProvider`. Complex subcommands may be blocked; use direct literals (e.g. `/games classic`, `/games mob`).
+- **Disguises vs Vanilla Invisibility**: Never rely on `MobEffects.INVISIBILITY` for mob disguises as it creates client rendering bugs and remote player invisibility. Use packet-level interception (`ServerEntityMixin.java`) and `ClientDisguiseHolder.kt`.
+- **Detailed Runbook**: See [docs/combat-rules-and-troubleshooting.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/combat-rules-and-troubleshooting.md).

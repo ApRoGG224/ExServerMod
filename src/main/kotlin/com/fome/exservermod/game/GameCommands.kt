@@ -3,6 +3,7 @@ package com.fome.exservermod.game
 import com.fome.exservermod.compat.bluemap.BlueMapCompat
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
+import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.OpenRoulettePayload
 import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
@@ -13,12 +14,16 @@ import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
+import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.sounds.SoundEvents
+import net.minecraft.sounds.SoundSource
 
 class GameCommands(
     private val game: HideAndSeekGame,
     private val disguiseManager: DisguiseManager = DisguiseManager(),
+    private val landmarkManager: LandmarkManager? = null,
 ) {
     fun register() {
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
@@ -33,15 +38,90 @@ class GameCommands(
                         1
                     }.then(
                         Commands
-                            .literal("vote")
+                            .literal("classic")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
+                                }
+                                1
+                            },
+                    ).then(
+                        Commands
+                            .literal("mob")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleStartMode(player, ctx.source.server, GameMode.MOB)
+                                }
+                                1
+                            },
+                    ).then(
+                        Commands
+                            .literal("start")
                             .then(
+                                Commands
+                                    .literal("classic")
+                                    .executes { ctx ->
+                                        val player = ctx.source.player
+                                        if (player != null) {
+                                            handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
+                                        }
+                                        1
+                                    },
+                            ).then(
+                                Commands
+                                    .literal("mob")
+                                    .executes { ctx ->
+                                        val player = ctx.source.player
+                                        if (player != null) {
+                                            handleStartMode(player, ctx.source.server, GameMode.MOB)
+                                        }
+                                        1
+                                    },
+                            ).then(
                                 Commands
                                     .argument("mode", StringArgumentType.word())
                                     .executes { ctx ->
                                         val player = ctx.source.player
                                         if (player != null) {
                                             val modeArg = StringArgumentType.getString(ctx, "mode").lowercase()
-                                            handleVote(player, ctx.source.server, modeArg)
+                                            handleVoteOrStart(player, ctx.source.server, modeArg)
+                                        }
+                                        1
+                                    },
+                            ),
+                    ).then(
+                        Commands
+                            .literal("vote")
+                            .then(
+                                Commands
+                                    .literal("classic")
+                                    .executes { ctx ->
+                                        val player = ctx.source.player
+                                        if (player != null) {
+                                            handleStartMode(player, ctx.source.server, GameMode.CLASSIC)
+                                        }
+                                        1
+                                    },
+                            ).then(
+                                Commands
+                                    .literal("mob")
+                                    .executes { ctx ->
+                                        val player = ctx.source.player
+                                        if (player != null) {
+                                            handleStartMode(player, ctx.source.server, GameMode.MOB)
+                                        }
+                                        1
+                                    },
+                            ).then(
+                                Commands
+                                    .argument("mode", StringArgumentType.word())
+                                    .executes { ctx ->
+                                        val player = ctx.source.player
+                                        if (player != null) {
+                                            val modeArg = StringArgumentType.getString(ctx, "mode").lowercase()
+                                            handleVoteOrStart(player, ctx.source.server, modeArg)
                                         }
                                         1
                                     },
@@ -76,6 +156,16 @@ class GameCommands(
                                 }
                                 1
                             },
+                    ).then(
+                        Commands
+                            .literal("hint")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleHint(player, ctx.source.server)
+                                }
+                                1
+                            },
                     ),
             )
         }
@@ -89,27 +179,10 @@ class GameCommands(
             GamePhase.IDLE, GamePhase.VOTING -> {
                 player.sendSystemMessage(
                     Component
-                        .translatable(
-                            "exservermod.game.status.voting",
-                            game.votes.size,
-                            HideAndSeekGame.REQUIRED_VOTES,
-                        ).withStyle(ChatFormatting.GOLD),
+                        .translatable("exservermod.game.status.choose_mode")
+                        .withStyle(ChatFormatting.GOLD),
                 )
-                val voteClassic =
-                    Component.translatable("exservermod.game.button.vote_classic").withStyle { style ->
-                        style
-                            .withColor(ChatFormatting.GREEN)
-                            .withClickEvent(ClickEvent.RunCommand("/games vote classic"))
-                            .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.vote_classic.hover")))
-                    }
-                val voteMob =
-                    Component.translatable("exservermod.game.button.vote_mob").withStyle { style ->
-                        style
-                            .withColor(ChatFormatting.AQUA)
-                            .withClickEvent(ClickEvent.RunCommand("/games vote mob"))
-                            .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.vote_mob.hover")))
-                    }
-                player.sendSystemMessage(voteClassic.copy().append(" ").append(voteMob))
+                player.sendSystemMessage(createVotingButtons())
             }
             GamePhase.HIDING -> {
                 val seconds = game.remainingTicks / HideAndSeekGame.TICKS_PER_SECOND
@@ -118,15 +191,32 @@ class GameCommands(
                         .translatable("exservermod.game.status.hiding", seconds, game.mode)
                         .withStyle(ChatFormatting.YELLOW),
                 )
-                if (player.uuid == game.hiderUuid) {
-                    val earlyStart =
-                        Component.translatable("exservermod.game.button.start_search").withStyle { style ->
+                if (game.isParticipant(player.uuid)) {
+                    val startSearchBtn =
+                        Component.translatable("exservermod.game.button.start_search_preparation").withStyle { style ->
                             style
                                 .withColor(ChatFormatting.GOLD)
                                 .withClickEvent(ClickEvent.RunCommand("/games startsearch"))
-                                .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.start_search.hover")))
+                                .withHoverEvent(
+                                    HoverEvent.ShowText(Component.translatable("exservermod.game.button.start_search.hover_hider")),
+                                )
                         }
-                    player.sendSystemMessage(earlyStart)
+                    val leaveBtn =
+                        Component.translatable("exservermod.game.button.cancel_game").withStyle { style ->
+                            style
+                                .withColor(ChatFormatting.RED)
+                                .withClickEvent(ClickEvent.RunCommand("/games leave"))
+                                .withHoverEvent(
+                                    HoverEvent.ShowText(Component.translatable("exservermod.game.button.cancel_game.hover")),
+                                )
+                        }
+                    player.sendSystemMessage(
+                        Component
+                            .empty()
+                            .append(startSearchBtn)
+                            .append("   ")
+                            .append(leaveBtn),
+                    )
                 }
             }
             GamePhase.SEEKING -> {
@@ -136,6 +226,18 @@ class GameCommands(
                         .translatable("exservermod.game.status.seeking", elapsed)
                         .withStyle(ChatFormatting.RED),
                 )
+                if (player.uuid == game.seekerUuid) {
+                    val hintBtn =
+                        Component.translatable("exservermod.game.button.hint_emergency").withStyle { style ->
+                            style
+                                .withColor(ChatFormatting.LIGHT_PURPLE)
+                                .withClickEvent(ClickEvent.RunCommand("/games hint"))
+                                .withHoverEvent(
+                                    HoverEvent.ShowText(Component.translatable("exservermod.game.button.hint_emergency.hover")),
+                                )
+                        }
+                    player.sendSystemMessage(hintBtn)
+                }
             }
             GamePhase.INTERMISSION -> {
                 val winnerName =
@@ -151,18 +253,35 @@ class GameCommands(
                         .withStyle(ChatFormatting.GOLD),
                 )
                 val continueBtn =
-                    Component.translatable("exservermod.game.button.continue_round").withStyle { style ->
+                    Component.translatable("exservermod.game.button.continue_round_action").withStyle { style ->
                         style
                             .withColor(ChatFormatting.GREEN)
                             .withClickEvent(ClickEvent.RunCommand("/games continue"))
-                            .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.continue_round.hover")))
+                            .withHoverEvent(
+                                HoverEvent.ShowText(Component.translatable("exservermod.game.button.continue_round.hover_catch")),
+                            )
                     }
-                player.sendSystemMessage(continueBtn)
+                val leaveBtn =
+                    Component.translatable("exservermod.game.button.leave_action").withStyle { style ->
+                        style
+                            .withColor(ChatFormatting.RED)
+                            .withClickEvent(ClickEvent.RunCommand("/games leave"))
+                            .withHoverEvent(
+                                HoverEvent.ShowText(Component.translatable("exservermod.game.button.leave.hover")),
+                            )
+                    }
+                player.sendSystemMessage(
+                    Component
+                        .empty()
+                        .append(continueBtn)
+                        .append("   ")
+                        .append(leaveBtn),
+                )
             }
         }
     }
 
-    private fun handleVote(
+    private fun handleVoteOrStart(
         player: ServerPlayer,
         server: MinecraftServer,
         modeArg: String,
@@ -180,21 +299,26 @@ class GameCommands(
                     return
                 }
             }
+        handleStartMode(player, server, mode)
+    }
 
-        when (val result = game.vote(player.uuid, mode)) {
-            is VoteResult.VoteRecorded -> {
-                server.playerList.broadcastSystemMessage(
-                    Component
-                        .translatable(
-                            "exservermod.game.vote.recorded",
-                            player.name.string,
-                            mode,
-                            result.votedPlayers,
-                            result.requiredPlayers,
-                        ).withStyle(ChatFormatting.YELLOW),
-                    false,
-                )
-            }
+    private fun handleStartMode(
+        player: ServerPlayer,
+        server: MinecraftServer,
+        mode: GameMode,
+    ) {
+        val onlinePlayers = server.playerList.players
+        if (onlinePlayers.size < 2) {
+            player.sendSystemMessage(
+                Component
+                    .translatable("exservermod.game.vote.need_two_players")
+                    .withStyle(ChatFormatting.RED),
+            )
+            return
+        }
+
+        val otherPlayer = onlinePlayers.firstOrNull { it.uuid != player.uuid } ?: onlinePlayers[1]
+        when (val result = game.startGameDirectly(player.uuid, otherPlayer.uuid, mode)) {
             is VoteResult.GameStarted -> {
                 if (result.mode == GameMode.MOB) {
                     val hider = server.playerList.getPlayer(result.hiderUuid)
@@ -242,22 +366,7 @@ class GameCommands(
                     false,
                 )
 
-                val earlyStartBtn =
-                    Component.translatable("exservermod.game.button.start_search").withStyle { style ->
-                        style
-                            .withColor(ChatFormatting.GOLD)
-                            .withClickEvent(ClickEvent.RunCommand("/games startsearch"))
-                            .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.start_search.hover_hider")))
-                    }
-                server.playerList.getPlayer(result.hiderUuid)?.sendSystemMessage(earlyStartBtn)
-            }
-            is VoteResult.ModeMismatch -> {
-                server.playerList.broadcastSystemMessage(
-                    Component
-                        .translatable("exservermod.game.vote.mismatch")
-                        .withStyle(ChatFormatting.RED),
-                    false,
-                )
+                broadcastPreparationButtons(server)
             }
             is VoteResult.InvalidPhase -> {
                 player.sendSystemMessage(
@@ -266,6 +375,7 @@ class GameCommands(
                         .withStyle(ChatFormatting.RED),
                 )
             }
+            else -> {}
         }
     }
 
@@ -275,6 +385,22 @@ class GameCommands(
     ) {
         val started = game.startSearch(player.uuid)
         if (started) {
+            val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+            for (uuid in participants) {
+                val p = server.playerList.getPlayer(uuid) ?: continue
+                p.connection.send(
+                    ClientboundSoundPacket(
+                        SoundEvents.RAID_HORN,
+                        SoundSource.PLAYERS,
+                        p.x,
+                        p.y,
+                        p.z,
+                        2.0f,
+                        1.0f,
+                        p.level().random.nextLong(),
+                    ),
+                )
+            }
             server.playerList.broadcastSystemMessage(
                 Component
                     .translatable("exservermod.game.search_started")
@@ -340,12 +466,127 @@ class GameCommands(
 
             val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
             BlueMapCompat.setPlayersVisibility(participants, false)
+            broadcastPreparationButtons(server)
         } else {
             player.sendSystemMessage(
                 Component
                     .translatable("exservermod.game.cannot_continue")
                     .withStyle(ChatFormatting.RED),
             )
+        }
+    }
+
+    private fun createVotingButtons(): Component {
+        val voteClassic =
+            Component.translatable("exservermod.game.button.vote_classic").withStyle { style ->
+                style
+                    .withColor(ChatFormatting.GREEN)
+                    .withClickEvent(ClickEvent.RunCommand("/games classic"))
+                    .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.vote_classic.hover")))
+            }
+        val voteMob =
+            Component.translatable("exservermod.game.button.vote_mob").withStyle { style ->
+                style
+                    .withColor(ChatFormatting.AQUA)
+                    .withClickEvent(ClickEvent.RunCommand("/games mob"))
+                    .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.game.button.vote_mob.hover")))
+            }
+        return Component
+            .empty()
+            .append(voteClassic)
+            .append("   ")
+            .append(voteMob)
+    }
+
+    private fun broadcastPreparationButtons(server: MinecraftServer) {
+        val startSearchBtn =
+            Component.translatable("exservermod.game.button.start_search_preparation").withStyle { style ->
+                style
+                    .withColor(ChatFormatting.GOLD)
+                    .withClickEvent(ClickEvent.RunCommand("/games startsearch"))
+                    .withHoverEvent(
+                        HoverEvent.ShowText(Component.translatable("exservermod.game.button.start_search.hover_hider")),
+                    )
+            }
+        val leaveBtn =
+            Component.translatable("exservermod.game.button.cancel_game").withStyle { style ->
+                style
+                    .withColor(ChatFormatting.RED)
+                    .withClickEvent(ClickEvent.RunCommand("/games leave"))
+                    .withHoverEvent(
+                        HoverEvent.ShowText(Component.translatable("exservermod.game.button.cancel_game.hover")),
+                    )
+            }
+        val prepRow =
+            Component
+                .empty()
+                .append(startSearchBtn)
+                .append("   ")
+                .append(leaveBtn)
+        server.playerList.broadcastSystemMessage(prepRow, false)
+    }
+
+    private fun handleHint(
+        player: ServerPlayer,
+        server: MinecraftServer,
+    ) {
+        when (val result = game.requestHint(player.uuid)) {
+            is HintResult.NotSeekingPhase -> {
+                player.sendSystemMessage(
+                    Component
+                        .translatable("exservermod.game.hint.only_seeking")
+                        .withStyle(ChatFormatting.RED),
+                )
+            }
+            is HintResult.NotSeeker -> {
+                player.sendSystemMessage(
+                    Component
+                        .translatable("exservermod.game.hint.only_seeker")
+                        .withStyle(ChatFormatting.RED),
+                )
+            }
+            is HintResult.OnCooldown -> {
+                player.sendSystemMessage(
+                    Component
+                        .translatable("exservermod.game.hint.cooldown", result.remainingSeconds)
+                        .withStyle(ChatFormatting.RED),
+                )
+            }
+            is HintResult.Success -> {
+                if (game.mode == GameMode.MOB) {
+                    val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
+                    val mobType = hider?.let { disguiseManager.getDisguise(it.uuid) }
+                    if (mobType != null) {
+                        val (hintMsg, category) = MobPool.getNextHint(mobType, game.lastHintCategory)
+                        game.recordHintCategory(category)
+                        val prefix = Component.translatable("exservermod.game.hint.prefix").withStyle(ChatFormatting.LIGHT_PURPLE)
+                        val full = Component.empty().append(prefix).append(hintMsg.withStyle(ChatFormatting.LIGHT_PURPLE))
+                        server.playerList.broadcastSystemMessage(full, false)
+                    }
+                } else {
+                    val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
+                    if (hider != null) {
+                        val dim =
+                            hider
+                                .level()
+                                .dimension()
+                                .identifier()
+                                .toString()
+                        val closest = landmarkManager?.findClosest(hider.x, hider.z, dim)
+                        if (closest != null) {
+                            val prefix = Component.translatable("exservermod.game.hint.prefix").withStyle(ChatFormatting.AQUA)
+                            val landmarkMsg =
+                                Component
+                                    .translatable(
+                                        "exservermod.landmarks.hint.closest",
+                                        closest.name,
+                                    ).withStyle(ChatFormatting.AQUA)
+                            val full = Component.empty().append(prefix).append(landmarkMsg)
+                            server.playerList.broadcastSystemMessage(full, false)
+                        }
+                    }
+                }
+            }
         }
     }
 

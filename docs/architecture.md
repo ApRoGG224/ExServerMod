@@ -3,15 +3,15 @@
 ## 1. Core Technology Stack
 - **Target Minecraft Version**: **Minecraft 26.2+** (compatible forward with 26.3, 26.4, etc.).
 - **Runtime Environment**: Java 25 LTS (OpenJDK 25).
-- **Primary Language**: **Kotlin ONLY** (`.kt`, Kotlin 2.4.21). Writing mod logic in Java is strictly forbidden.
+- **Primary Language**: **Kotlin ONLY** (`.kt`, Kotlin 2.4.21). Mod business logic is written strictly in Kotlin; Java is reserved exclusively for low-level Fabric bytecode mixins (`src/main/java/`).
 - **Platform / Loader**: [Fabric Loader](https://fabricmc.net/) (0.19.5+) + [Fabric Language Kotlin](https://github.com/FabricMC/fabric-language-kotlin) (`FLK` 1.14.2+).
-- **Target Environment**: Dedicated Minecraft Server (FoMe Server). Client-specific code must not be bundled.
+- **Target Environment**: Dedicated Minecraft Server (FoMe Server) with optional client-side cosmetic features (Roulette GUI, 1st/3rd person disguise rendering).
 - **Build System**: Gradle 9.8.2 with Kotlin DSL (`build.gradle.kts`) and `net.fabricmc.fabric-loom` 1.19.2 (unobfuscated toolchain for Minecraft 26.x+).
 - **Task Automation**: [Taskfile.yml](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/Taskfile.yml).
-- **Gameplay Invariants**: [docs/gameplay-rules.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/gameplay-rules.md) (zero block griefing, no teleportation except anti-stuck, pure vanilla balance).
+- **Gameplay Invariants & Combat Rules**: [docs/gameplay-rules.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/gameplay-rules.md) and [docs/combat-rules-and-troubleshooting.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/combat-rules-and-troubleshooting.md).
 
 ## 2. Code Quality & Verification Gates
-- **Strict i18n Localization**: No user-facing hardcoded string literals. All messages, tooltips, and buttons must use `Component.translatable` referencing keys in `src/main/resources/assets/exservermod/lang/en_us.json` (see [ADR 0003](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n-localization.md)).
+- **Strict i18n Localization**: No user-facing hardcoded string literals. All messages, tooltips, and buttons must use `Component.translatable` referencing keys. The primary default language is Russian (`ru_ru.json` and default fallback `en_us.json`), with English preserved in `en_backup.json` for Telegram bot language switching (see [ADR 0003](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/decisions/0003-strict-i18n-localization.md)).
 - **Code Style & Linting**: `ktlint` (enforced via `task lint` and `task format`).
 - **Testing**:
   - Unit tests with JUnit 5 / Kotlin Test for pure game logic, config parsing, commands, and utility algorithms.
@@ -36,3 +36,15 @@ Deployments run on demand via `task deploy` (or `task deploy:major`):
    - Server identification via `EXAROTON_SERVER_ID`.
    - **Atomic File Replacement**: Script [scripts/deploy_exaroton.py](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/scripts/deploy_exaroton.py) queries remote directory `mods/`, deletes previous versions of this mod (`<mod_id>-*.jar`), and uploads the newly built jar to prevent duplicate jar conflicts.
    - Optional automatic server restart if `EXAROTON_AUTO_RESTART=true`.
+
+## 5. Disguise & Network Packet Architecture
+- **Server Packet Interception (`ServerEntityMixin.java`)**:
+  - Intercepts `sendPairingData` to broadcast `ClientboundAddEntityPacket` with the disguised mob's `EntityType` and dimensions to all observing clients.
+  - Remote players see the actual 3D mob with correct bounding box natively without requiring client-side mods.
+- **Client Disguise Synchronization (`ClientDisguiseHolder.kt` & `DisguiseSyncPayload.kt`)**:
+  - When disguise state changes, server dispatches `DisguiseSyncPayload` to the disguised player.
+  - Client holder mirrors position (`xOld, yOld, zOld`), limb swings (`walkAnimation.position`), equipment, and sneaking pose to eliminate client-side ghosting and model flickering.
+- **BlueMap Soft Integration (`BlueMapCompat.kt` & `BlueMapBridge.kt`)**:
+  - Isolated reflection bridge toggles player visibility on the web map during hiding and seeking phases, restoring visibility upon round conclusion.
+- **Operational & Troubleshooting Guide**:
+  - Detailed post-mortem, combat invariants, and fixes are maintained in [docs/combat-rules-and-troubleshooting.md](file:///Users/soroqn/me/private-code/Minecraft-FoMe/ExServerMod/docs/combat-rules-and-troubleshooting.md).

@@ -114,17 +114,18 @@ def deploy() -> None:
 
     # 1. Inspect existing files in mods directory
     print(f"[REMOTE] Checking '{mods_dir}/' on Exaroton server ({server_id})...")
-    remote_files = api_request(server_id, token, f"/files/data/{mods_dir}")
+    remote_files = api_request(server_id, token, f"/files/info/{mods_dir}")
 
     old_jars_to_delete: list[str] = []
     if remote_files and remote_files.get("success"):
-        file_list = remote_files.get("data", [])
+        data = remote_files.get("data", {})
+        file_list = data.get("children", []) if isinstance(data, dict) else []
         if isinstance(file_list, list):
             for item in file_list:
                 item_name = item.get("name", "")
-                item_path = item.get("path", f"{mods_dir}/{item_name}")
+                item_path = item.get("path", f"{mods_dir}/{item_name}").lstrip("/")
                 # Look for previous versions of this mod
-                if item_name.startswith(f"{base_name}-") and item_name.endswith(".jar"):
+                if (item_name.startswith(f"{base_name}-") or item_name == f"{base_name}.jar") and item_name.endswith(".jar"):
                     if item_name != local_jar.name:
                         old_jars_to_delete.append(item_path)
 
@@ -147,11 +148,25 @@ def deploy() -> None:
     )
     print("[SUCCESS] Upload complete.")
 
-    # 4. Optional restart
-    if auto_restart:
-        print("[RESTART] Restarting Exaroton server...")
-        api_request(server_id, token, "/restart", method="POST")
-        print("[SUCCESS] Server restart command sent.")
+    # 4. Optional restart / start
+    if "--start" in sys.argv:
+        server_info = api_request(server_id, token, "")
+        status = server_info.get("data", {}).get("status")
+        if status == 0:
+            print("[START] Starting Exaroton server...")
+            api_request(server_id, token, "/start", method="POST")
+            print("[SUCCESS] Server start command sent.")
+    elif auto_restart:
+        server_info = api_request(server_id, token, "")
+        status = server_info.get("data", {}).get("status")
+        if status == 1:
+            print("[RESTART] Server is online. Restarting Exaroton server...")
+            api_request(server_id, token, "/restart", method="POST")
+            print("[SUCCESS] Server restart command sent.")
+        elif status == 0:
+            print("[INFO] Server is offline (status 0). Mod uploaded; will load on next startup.")
+        else:
+            print(f"[INFO] Server status is {status}. Mod uploaded.")
     else:
         print("[INFO] Server restart skipped (EXAROTON_AUTO_RESTART=false).")
 

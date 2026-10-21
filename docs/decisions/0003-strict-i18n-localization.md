@@ -12,9 +12,11 @@ In previous iterations, user-facing text, button labels, hover tooltips, and gam
 - All user-facing text (chat broadcasts, command responses, interactive button labels, hover event descriptions, action bar messages, and scoreboard labels) must be rendered using `Component.translatable(key, *args)`.
 - Direct user-facing string literals via `Component.literal(...)` are strictly prohibited in game logic.
 
-### 2. Centralized Language File
-- The master language file is maintained strictly in English at:
-  `src/main/resources/assets/exservermod/lang/en_us.json`.
+### 2. Centralized Language File & Primary Language
+- Primary default language is Russian:
+  - `src/main/resources/assets/exservermod/lang/ru_ru.json` contains full Russian translations.
+  - `src/main/resources/assets/exservermod/lang/en_us.json` also defaults to Russian so that clients without custom locale or server fallback render Russian out of the box.
+  - English translations are preserved in `src/main/resources/assets/exservermod/lang/en_backup.json` for Telegram bot language switching.
 - Key naming convention: hierarchical dot-notation starting with mod id:
   `exservermod.<subsystem>.<component>.<identifier>`
   (e.g., `exservermod.game.button.vote_classic`, `exservermod.landmarks.hint.closest`).

@@ -6,6 +6,7 @@ import com.fome.exservermod.game.GameEventHandler
 import com.fome.exservermod.game.HideAndSeekGame
 import com.fome.exservermod.landmarks.LandmarkCommands
 import com.fome.exservermod.landmarks.LandmarkManager
+import com.fome.exservermod.network.DisguiseSyncPayload
 import com.fome.exservermod.network.OpenRoulettePayload
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
@@ -32,9 +33,10 @@ object ExServerMod : ModInitializer {
         logger.info("[ExServerMod] Initializing server mod.")
 
         PayloadTypeRegistry.clientboundPlay().register(OpenRoulettePayload.TYPE, OpenRoulettePayload.STREAM_CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(DisguiseSyncPayload.TYPE, DisguiseSyncPayload.STREAM_CODEC)
 
         GameEventHandler(game, landmarkManager, disguiseManager).register()
-        GameCommands(game, disguiseManager).register()
+        GameCommands(game, disguiseManager, landmarkManager).register()
         LandmarkCommands(landmarkManager).register()
 
         logger.info("[ExServerMod] Core game, disguise engine, and landmarks initialized.")

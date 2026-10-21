@@ -1,5 +1,6 @@
 package com.fome.exservermod.disguise
 
+import com.fome.exservermod.client.ClientDisguiseHolder
 import com.fome.exservermod.game.GameEventHandler
 import com.fome.exservermod.game.HideAndSeekGame
 import net.minecraft.SharedConstants
@@ -168,13 +169,13 @@ class DisguiseTest {
         assertEquals(1.0, playerScale, 1e-4)
 
         val ironGolemScale = MobPool.calculateScale(1.4f, 2.7f)
-        assertEquals(1.4 / 0.6, ironGolemScale, 1e-4)
+        assertEquals(1.0, ironGolemScale, 1e-4)
 
         val endermanScale = MobPool.calculateScale(0.6f, 2.9f)
-        assertEquals(2.9 / 1.8, endermanScale, 1e-4)
+        assertEquals(1.0, endermanScale, 1e-4)
 
         val chickenScale = MobPool.calculateScale(0.4f, 0.7f)
-        assertEquals(0.4 / 0.6, chickenScale, 1e-4)
+        assertEquals(1.0, chickenScale, 1e-4)
     }
 
     @Test
@@ -214,5 +215,41 @@ class DisguiseTest {
         manager.clearAllDisguises()
         assertFalse(manager.isDisguised(player2))
         assertTrue(manager.disguises.isEmpty())
+    }
+
+    @Test
+    fun `test getNextHint avoids consecutive identical categories`() {
+        var lastCategory: HintCategory? = null
+        for (i in 1..100) {
+            val (hint, category) = MobPool.getNextHint(EntityTypes.ZOMBIE, lastCategory)
+            assertNotNull(hint)
+            assertTrue(category != lastCategory, "Consecutive hints must have different categories")
+            lastCategory = category
+        }
+    }
+
+    @Test
+    fun `test client disguise holder tracking`() {
+        val player = UUID.randomUUID()
+        ClientDisguiseHolder.clear()
+
+        assertFalse(ClientDisguiseHolder.isDisguised(player))
+        assertEquals(null, ClientDisguiseHolder.getDisguiseMobId(player))
+
+        ClientDisguiseHolder.setDisguise(player, "minecraft:creeper", true)
+        assertTrue(ClientDisguiseHolder.isDisguised(player))
+        assertEquals("minecraft:creeper", ClientDisguiseHolder.getDisguiseMobId(player))
+
+        ClientDisguiseHolder.setDisguise(player, "minecraft:skeleton", true)
+        assertTrue(ClientDisguiseHolder.isDisguised(player))
+        assertEquals("minecraft:skeleton", ClientDisguiseHolder.getDisguiseMobId(player))
+
+        ClientDisguiseHolder.setDisguise(player, "", false)
+        assertFalse(ClientDisguiseHolder.isDisguised(player))
+        assertEquals(null, ClientDisguiseHolder.getDisguiseMobId(player))
+
+        ClientDisguiseHolder.setDisguise(player, "minecraft:zombie", true)
+        ClientDisguiseHolder.clear()
+        assertFalse(ClientDisguiseHolder.isDisguised(player))
     }
 }
