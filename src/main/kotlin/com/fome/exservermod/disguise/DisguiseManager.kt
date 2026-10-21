@@ -42,6 +42,11 @@ class DisguiseManager {
 
         player.addEffect(MobEffectInstance(MobEffects.INVISIBILITY, -1, 0, false, false, false))
 
+        if (MobPool.getOrigin(mobType) == Origin.AQUATIC) {
+            player.addEffect(MobEffectInstance(MobEffects.WATER_BREATHING, -1, 0, false, false, false))
+            player.airSupply = player.maxAirSupply
+        }
+
         player.sendSystemMessage(
             Component
                 .translatable("exservermod.disguise.you_are_disguised", mobType.description)
@@ -53,6 +58,8 @@ class DisguiseManager {
         removeDisguise(player.uuid)
         player.getAttribute(Attributes.SCALE)?.baseValue = 1.0
         player.removeEffect(MobEffects.INVISIBILITY)
+        player.removeEffect(MobEffects.WATER_BREATHING)
+        player.airSupply = player.maxAirSupply
     }
 
     fun clearAll(server: MinecraftServer) {
@@ -61,6 +68,8 @@ class DisguiseManager {
             if (player != null) {
                 player.getAttribute(Attributes.SCALE)?.baseValue = 1.0
                 player.removeEffect(MobEffects.INVISIBILITY)
+                player.removeEffect(MobEffects.WATER_BREATHING)
+                player.airSupply = player.maxAirSupply
             }
         }
         clearAllDisguises()
