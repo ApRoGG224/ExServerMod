@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "exservermod",
+  "version": "${version}",
+  "name": "ExServerMod",
+  "description": "Server-side Minecraft mod for FoMe server.",
+  "authors": [
+    "FoMe"
+  ],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      {
+        "adapter": "kotlin",
+        "value": "com.fome.exservermod.ExServerMod"
+      }
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": ">=26.2",
+    "java": ">=25",
+    "fabric-language-kotlin": ">=1.14.0",
+    "fabric-api": "*"
+  }
+}
