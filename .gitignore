@@ -21,4 +21,5 @@ Thumbs.db
 
 # Minecraft run directory & logs
 run/
+logs/
 *.log
