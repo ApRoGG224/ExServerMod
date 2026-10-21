@@ -6,7 +6,9 @@ import com.fome.exservermod.game.GameEventHandler
 import com.fome.exservermod.game.HideAndSeekGame
 import com.fome.exservermod.landmarks.LandmarkCommands
 import com.fome.exservermod.landmarks.LandmarkManager
+import com.fome.exservermod.network.OpenRoulettePayload
 import net.fabricmc.api.ModInitializer
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.loader.api.FabricLoader
 import org.slf4j.LoggerFactory
 
@@ -28,6 +30,8 @@ object ExServerMod : ModInitializer {
 
     override fun onInitialize() {
         logger.info("[ExServerMod] Initializing server mod.")
+
+        PayloadTypeRegistry.clientboundPlay().register(OpenRoulettePayload.TYPE, OpenRoulettePayload.STREAM_CODEC)
 
         GameEventHandler(game, landmarkManager, disguiseManager).register()
         GameCommands(game, disguiseManager).register()
