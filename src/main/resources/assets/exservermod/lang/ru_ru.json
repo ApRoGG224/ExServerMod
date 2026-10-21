@@ -83,5 +83,11 @@
   "exservermod.game.hint.only_seeking": "[Игры] Подсказки доступны только во время фазы поиска.",
   "exservermod.game.hint.only_seeker": "[Игры] Только искатель может запрашивать подсказки.",
   "exservermod.game.hint.cooldown": "[Игры] Подсказка перезаряжается! Осталось %s с.",
-  "exservermod.game.hint.prefix": "[Срочная подсказка] "
+  "exservermod.game.hint.prefix": "[Срочная подсказка] ",
+  "exservermod.disguise.not_stuck": "[Игры] Вы не застряли в блоках!",
+  "exservermod.disguise.unstuck_cooldown": "[Игры] Перезарядка: подождите %s с.",
+  "exservermod.disguise.unstuck_limit": "[Игры] Лимит спасений от застревания на этот раунд исчерпан (макс %s).",
+  "exservermod.disguise.unstuck_no_spot": "[Игры] Не удалось найти безопасное место поблизости!",
+  "exservermod.disguise.button.unstuck": "[ 🌀 Выбраться ]",
+  "exservermod.disguise.button.unstuck.hover": "Телепортироваться в ближайшее безопасное место (при застревании)"
 }
