@@ -45,5 +45,16 @@
   "exservermod.disguise.you_are_disguised": "[Games] You are disguised as %s!",
   "exservermod.disguise.revealed": "[Games] Hider %s was disguised as %s!",
   "exservermod.disguise.cleared": "[Games] Disguise cleared.",
-  "exservermod.disguise.anti_stuck_relocated": "[Games] Anti-stuck safeguard relocated you to a safe spot."
+  "exservermod.disguise.anti_stuck_relocated": "[Games] Anti-stuck safeguard relocated you to a safe spot.",
+  "exservermod.disguise.hint.size.tiny": "[Hint] The hider is disguised as a tiny creature (under 0.8m tall)!",
+  "exservermod.disguise.hint.size.medium": "[Hint] The hider is disguised as a medium-sized creature!",
+  "exservermod.disguise.hint.size.colossal": "[Hint] The hider is disguised as a colossal creature (over 2.4m tall)!",
+  "exservermod.disguise.hint.origin.nether": "[Hint] The hider is disguised as a creature originating from the Nether!",
+  "exservermod.disguise.hint.origin.the_end": "[Hint] The hider is disguised as a creature hailing from The End!",
+  "exservermod.disguise.hint.origin.aquatic": "[Hint] The hider is disguised as an aquatic creature!",
+  "exservermod.disguise.hint.origin.overworld": "[Hint] The hider is disguised as a creature native to the Overworld!",
+  "exservermod.disguise.hint.locomotion.flying": "[Hint] The hider is disguised as a flying creature!",
+  "exservermod.disguise.hint.locomotion.terrestrial": "[Hint] The hider is disguised as a terrestrial ground walker!",
+  "exservermod.disguise.hint.disposition.passive": "[Hint] The hider is disguised as a peaceful, passive mob!",
+  "exservermod.disguise.hint.disposition.hostile": "[Hint] The hider is disguised as a hostile predator or monster!"
 }
