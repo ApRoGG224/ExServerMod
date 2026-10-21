@@ -1,0 +1,79 @@
+version: '3'
+
+tasks:
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list
+
+  build:
+    desc: "Build mod jar using Gradle"
+    cmds:
+      - ./gradlew build
+
+  test:
+    desc: "Run automated tests for the mod"
+    cmds:
+      - ./gradlew test
+
+  lint:
+    desc: "Check Kotlin code style and lint errors"
+    cmds:
+      - ./gradlew ktlintCheck
+
+  format:
+    desc: "Format Kotlin source code"
+    cmds:
+      - ./gradlew ktlintFormat
+
+  pre-commit:
+    desc: "Run pre-commit checks (lint & tests)"
+    cmds:
+      - task: lint
+      - task: test
+
+  version:
+    desc: "Show current mod version"
+    cmds:
+      - python3 scripts/bump_version.py get
+
+  version:patch:
+    desc: "Bump patch version (e.g. 1.0.0 -> 1.0.1)"
+    cmds:
+      - python3 scripts/bump_version.py patch
+
+  version:minor:
+    desc: "Bump minor version (e.g. 1.0 -> 1.1)"
+    cmds:
+      - python3 scripts/bump_version.py minor
+
+  version:major:
+    desc: "Bump major version (e.g. 1.1 -> 2.0)"
+    cmds:
+      - python3 scripts/bump_version.py major
+
+  deploy:
+    desc: "Bump minor version, build, and deploy to Exaroton (default deploy)"
+    cmds:
+      - task: version:minor
+      - task: build
+      - python3 scripts/deploy_exaroton.py
+
+  deploy:minor:
+    desc: "Alias for deploy (bumps minor: 1.0 -> 1.1)"
+    cmds:
+      - task: deploy
+
+  deploy:major:
+    desc: "Bump major version (1.x -> 2.0), build, and deploy to Exaroton"
+    cmds:
+      - task: version:major
+      - task: build
+      - python3 scripts/deploy_exaroton.py
+
+  deploy:patch:
+    desc: "Bump patch version (1.0.0 -> 1.0.1), build, and deploy to Exaroton"
+    cmds:
+      - task: version:patch
+      - task: build
+      - python3 scripts/deploy_exaroton.py
