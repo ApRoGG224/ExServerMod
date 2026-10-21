@@ -2,10 +2,13 @@ package com.fome.exservermod.game
 
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
+import com.fome.exservermod.network.OpenRoulettePayload
 import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.ChatFormatting
 import net.minecraft.commands.Commands
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
@@ -195,7 +198,14 @@ class GameCommands(
                 if (result.mode == GameMode.MOB) {
                     val hider = server.playerList.getPlayer(result.hiderUuid)
                     if (hider != null) {
-                        disguiseManager.applyDisguise(hider, MobPool.getRandomMob())
+                        val targetMob = MobPool.getRandomMob()
+                        disguiseManager.applyDisguise(hider, targetMob)
+                        val targetMobId = BuiltInRegistries.ENTITY_TYPE.getKey(targetMob).toString()
+                        val candidates =
+                            (0 until 20).map {
+                                BuiltInRegistries.ENTITY_TYPE.getKey(MobPool.getRandomMob()).toString()
+                            }
+                        ServerPlayNetworking.send(hider, OpenRoulettePayload(targetMobId, candidates))
                     }
                 }
 
@@ -286,7 +296,14 @@ class GameCommands(
             if (game.mode == GameMode.MOB) {
                 val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
                 if (hider != null) {
-                    disguiseManager.applyDisguise(hider, MobPool.getRandomMob())
+                    val targetMob = MobPool.getRandomMob()
+                    disguiseManager.applyDisguise(hider, targetMob)
+                    val targetMobId = BuiltInRegistries.ENTITY_TYPE.getKey(targetMob).toString()
+                    val candidates =
+                        (0 until 20).map {
+                            BuiltInRegistries.ENTITY_TYPE.getKey(MobPool.getRandomMob()).toString()
+                        }
+                    ServerPlayNetworking.send(hider, OpenRoulettePayload(targetMobId, candidates))
                 }
             }
 
