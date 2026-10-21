@@ -60,11 +60,16 @@ The project documentation, gameplay rules, testing workflow, and architecture ar
   - Proximity hint broadcast (every 50s) and 20-block movement alert in Hide & Seek.
   - Unit tests in `LandmarkTest.kt`.
 - [x] **Task 4: Mob Disguise Engine & Scale Hitbox System**
-  - Curated 34 balanced ground mob pool (zero bosses, zero flying entities).
+  - Expanded Mob Pool: all living entities in Minecraft 1.21.1 / 26.2 (80+ mobs, from Bee/Silverfish to Warden/Dragon).
+  - Trait categorization for hints: SizeClass (Tiny < 0.8m, Medium, Colossal > 2.4m), Origin (Nether, The End, Aquatic, Overworld), Locomotion (Flying, Terrestrial), Disposition (Passive, Hostile).
   - Dynamic scale adjustment via vanilla `Attributes.SCALE` (`max(mobWidth / 0.6, mobHeight / 1.8)`).
   - Infinite invisibility without particles (`MobEffects.INVISIBILITY`).
+  - Environmental immunity: permanent water breathing (`MobEffects.WATER_BREATHING`) and air supply maintenance for aquatic mobs.
   - Automated anti-stuck safeguard relocating trapped players to safe air blocks.
+  - Two-tier seeking hint engine:
+    - Acoustic taunts every 45s (900 ticks) playing native ambient mob sounds audible within 35-40 blocks.
+    - Intellectual categorical hints every 90s (1800 ticks) broadcasting clues to chat via strict i18n keys.
   - Strict stealth invariant: only hider knows their disguise during hiding/seeking; revealed at intermission.
   - State tracking, cleanup on disconnect, intermission, idle, and server stop.
-  - Comprehensive unit tests in `DisguiseTest.kt`.
+  - Comprehensive unit tests in `DisguiseTest.kt` verifying pool, categorization, timers, and scaling math.
 - [ ] **Task 5: Visual Roulette Screen & Client Animation**
