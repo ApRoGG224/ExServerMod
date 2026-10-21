@@ -56,5 +56,9 @@
   "exservermod.disguise.hint.locomotion.flying": "[Hint] The hider is disguised as a flying creature!",
   "exservermod.disguise.hint.locomotion.terrestrial": "[Hint] The hider is disguised as a terrestrial ground walker!",
   "exservermod.disguise.hint.disposition.passive": "[Hint] The hider is disguised as a peaceful, passive mob!",
-  "exservermod.disguise.hint.disposition.hostile": "[Hint] The hider is disguised as a hostile predator or monster!"
+  "exservermod.disguise.hint.disposition.hostile": "[Hint] The hider is disguised as a hostile predator or monster!",
+  "exservermod.roulette.title": "Mob Disguise Roulette",
+  "exservermod.roulette.mob": "Selected: %s",
+  "exservermod.roulette.spinning": "Selecting mob disguise...",
+  "exservermod.roulette.ready": "Disguise Selected! Game Starting..."
 }
