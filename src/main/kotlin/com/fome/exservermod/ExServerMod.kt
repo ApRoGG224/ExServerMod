@@ -8,6 +8,8 @@ import com.fome.exservermod.landmarks.LandmarkCommands
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.DisguiseSyncPayload
 import com.fome.exservermod.network.OpenRoulettePayload
+import com.fome.exservermod.network.RouletteFinishedPayload
+import com.fome.exservermod.sound.ModSounds
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.loader.api.FabricLoader
@@ -32,8 +34,11 @@ object ExServerMod : ModInitializer {
     override fun onInitialize() {
         logger.info("[ExServerMod] Initializing server mod.")
 
+        ModSounds.register()
+
         PayloadTypeRegistry.clientboundPlay().register(OpenRoulettePayload.TYPE, OpenRoulettePayload.STREAM_CODEC)
         PayloadTypeRegistry.clientboundPlay().register(DisguiseSyncPayload.TYPE, DisguiseSyncPayload.STREAM_CODEC)
+        PayloadTypeRegistry.serverboundPlay().register(RouletteFinishedPayload.TYPE, RouletteFinishedPayload.STREAM_CODEC)
 
         GameEventHandler(game, landmarkManager, disguiseManager).register()
         GameCommands(game, disguiseManager, landmarkManager).register()

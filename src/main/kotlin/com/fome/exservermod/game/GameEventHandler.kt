@@ -5,6 +5,7 @@ import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.DisguiseSyncPayload
+import com.fome.exservermod.network.RouletteFinishedPayload
 import it.unimi.dsi.fastutil.ints.IntArrayList
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -62,6 +63,7 @@ class GameEventHandler(
         registerJoin()
         registerDisconnect()
         registerServerStopping()
+        registerRouletteFinished()
     }
 
     private fun registerDamageProtection() {
@@ -213,6 +215,7 @@ class GameEventHandler(
 
     private fun registerServerTick() {
         ServerTickEvents.END_SERVER_TICK.register { server ->
+            RouletteManager.checkTimeouts(server, disguiseManager)
             val transition = game.tick()
             if (transition is TickResult.PhaseChanged) {
                 when (transition.newPhase) {
@@ -514,9 +517,18 @@ class GameEventHandler(
 
     private fun registerServerStopping() {
         ServerLifecycleEvents.SERVER_STOPPING.register { server ->
+            RouletteManager.clear()
             disguiseManager.clearAll(server)
             val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
             BlueMapCompat.setPlayersVisibility(participants, true)
+        }
+    }
+
+    private fun registerRouletteFinished() {
+        ServerPlayNetworking.registerGlobalReceiver(RouletteFinishedPayload.TYPE) { _, ctx ->
+            ctx.server().execute {
+                RouletteManager.applyDisguise(ctx.player(), disguiseManager)
+            }
         }
     }
 }

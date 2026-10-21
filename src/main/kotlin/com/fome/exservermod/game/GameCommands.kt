@@ -324,12 +324,14 @@ class GameCommands(
                     val hider = server.playerList.getPlayer(result.hiderUuid)
                     if (hider != null) {
                         val targetMob = MobPool.getRandomMob()
-                        disguiseManager.applyDisguise(hider, targetMob)
                         val targetMobId = BuiltInRegistries.ENTITY_TYPE.getKey(targetMob).toString()
-                        val candidates =
-                            (0 until 20).map {
-                                BuiltInRegistries.ENTITY_TYPE.getKey(MobPool.getRandomMob()).toString()
-                            }
+                        val poolCandidates =
+                            MobPool.POOL
+                                .filter { it != targetMob }
+                                .shuffled()
+                                .take(29)
+                        val candidates = (poolCandidates + targetMob).shuffled().map { BuiltInRegistries.ENTITY_TYPE.getKey(it).toString() }
+                        RouletteManager.queueDisguise(hider.uuid, targetMob)
                         ServerPlayNetworking.send(hider, OpenRoulettePayload(targetMobId, candidates))
                     }
                 }
@@ -426,12 +428,14 @@ class GameCommands(
                 val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
                 if (hider != null) {
                     val targetMob = MobPool.getRandomMob()
-                    disguiseManager.applyDisguise(hider, targetMob)
                     val targetMobId = BuiltInRegistries.ENTITY_TYPE.getKey(targetMob).toString()
-                    val candidates =
-                        (0 until 20).map {
-                            BuiltInRegistries.ENTITY_TYPE.getKey(MobPool.getRandomMob()).toString()
-                        }
+                    val poolCandidates =
+                        MobPool.POOL
+                            .filter { it != targetMob }
+                            .shuffled()
+                            .take(29)
+                    val candidates = (poolCandidates + targetMob).shuffled().map { BuiltInRegistries.ENTITY_TYPE.getKey(it).toString() }
+                    RouletteManager.queueDisguise(hider.uuid, targetMob)
                     ServerPlayNetworking.send(hider, OpenRoulettePayload(targetMobId, candidates))
                 }
             }

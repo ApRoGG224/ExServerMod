@@ -1,0 +1,11 @@
+{
+  "roulette_spin": {
+    "category": "master",
+    "sounds": [
+      {
+        "name": "exservermod:roulette_spin",
+        "stream": true
+      }
+    ]
+  }
+}
