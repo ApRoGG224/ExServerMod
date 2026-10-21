@@ -16,6 +16,12 @@
         "adapter": "kotlin",
         "value": "com.fome.exservermod.ExServerMod"
       }
+    ],
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "com.fome.exservermod.client.ExServerModClient"
+      }
     ]
   },
   "depends": {
