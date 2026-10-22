@@ -15,8 +15,11 @@ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.ChatFormatting
+import net.minecraft.core.BlockPos
+import net.minecraft.core.GlobalPos
 import net.minecraft.core.Holder
 import net.minecraft.core.component.DataComponents
+import net.minecraft.core.particles.VibrationParticleOption
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
@@ -36,7 +39,12 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
+import net.minecraft.world.item.component.LodestoneTracker
+import net.minecraft.world.level.gameevent.BlockPositionSource
+import net.minecraft.world.phys.Vec3
+import java.util.Optional
 import kotlin.math.hypot
+import kotlin.random.Random
 
 class GameEventHandler(
     private val game: HideAndSeekGame,
@@ -48,12 +56,20 @@ class GameEventHandler(
         const val ACOUSTIC_TAUNT_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
         const val INTELLECTUAL_HINT_INTERVAL_TICKS = 90 * HideAndSeekGame.TICKS_PER_SECOND // 90 seconds = 1800 ticks
         const val DISTANCE_HINT_INTERVAL_TICKS = 180 * HideAndSeekGame.TICKS_PER_SECOND // 180 seconds = 3600 ticks
+        const val TRACKER_COMPASS_DURATION_TICKS = 20 * HideAndSeekGame.TICKS_PER_SECOND // 20 seconds = 400 ticks
+        const val LATE_GAME_HINT_TIME_TICKS = 10 * 60 * HideAndSeekGame.TICKS_PER_SECOND // 10 minutes = 12000 ticks
+        const val ECHO_SPHERE_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
         const val MOVEMENT_ALERT_DISTANCE = 25.0
+        const val SECTOR_OFFSET_MIN = 15.0
+        const val SECTOR_OFFSET_MAX = 30.0
+        const val SPHERE_STOP_DISTANCE = 5.0
     }
 
     private var hiderInitialX: Double? = null
     private var hiderInitialZ: Double? = null
     private var hasAlertedMovedTwentyFiveBlocks: Boolean = false
+    private var lastPhase: GamePhase = GamePhase.IDLE
+    private var trackerCompassRemovalTick: Int? = null
 
     fun register() {
         registerDamageProtection()
@@ -98,6 +114,7 @@ class GameEventHandler(
                         hiderInitialX = null
                         hiderInitialZ = null
                         hasAlertedMovedTwentyFiveBlocks = false
+                        level.server?.let { clearTrackerCompasses(it) }
 
                         val seekerName = player.name.string
                         val hiderName = entity.name.string
@@ -219,24 +236,8 @@ class GameEventHandler(
             if (transition is TickResult.PhaseChanged) {
                 when (transition.newPhase) {
                     GamePhase.SEEKING -> {
-                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
-                        BlueMapCompat.setPlayersVisibility(participants, false)
                         playSoundToParticipants(server, SoundEvents.RAID_HORN, 2.0f, 1.0f)
-
                         val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
-                        if (seeker != null) {
-                            val emergencyHintBtn =
-                                Component.translatable("exservermod.game.button.hint_emergency").withStyle { style ->
-                                    style
-                                        .withColor(ChatFormatting.LIGHT_PURPLE)
-                                        .withClickEvent(ClickEvent.RunCommand("/games hint"))
-                                        .withHoverEvent(
-                                            HoverEvent.ShowText(Component.translatable("exservermod.game.button.hint_emergency.hover")),
-                                        )
-                                }
-                            seeker.sendSystemMessage(emergencyHintBtn)
-                        }
-
                         val seekerName = seeker?.name?.string ?: "Seeker"
                         server.playerList.broadcastSystemMessage(
                             Component
@@ -244,37 +245,8 @@ class GameEventHandler(
                                 .withStyle(ChatFormatting.RED),
                             false,
                         )
-
-                        // Record initial hider position for 25-block movement warning
-                        val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
-                        if (hider != null) {
-                            hiderInitialX = hider.x
-                            hiderInitialZ = hider.z
-                            hasAlertedMovedTwentyFiveBlocks = false
-                        }
-                    }
-                    GamePhase.HIDING -> {
-                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
-                        BlueMapCompat.setPlayersVisibility(participants, false)
-                        hiderInitialX = null
-                        hiderInitialZ = null
-                        hasAlertedMovedTwentyFiveBlocks = false
-                        disguiseManager.resetUnstuckCounters()
-                    }
-                    GamePhase.INTERMISSION -> {
-                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
-                        BlueMapCompat.setPlayersVisibility(participants, true)
-                        hiderInitialX = null
-                        hiderInitialZ = null
-                        hasAlertedMovedTwentyFiveBlocks = false
                     }
                     GamePhase.IDLE -> {
-                        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
-                        BlueMapCompat.setPlayersVisibility(participants, true)
-                        disguiseManager.clearAll(server)
-                        hiderInitialX = null
-                        hiderInitialZ = null
-                        hasAlertedMovedTwentyFiveBlocks = false
                         server.playerList.broadcastSystemMessage(
                             Component
                                 .translatable("exservermod.game.reset_idle")
@@ -282,11 +254,29 @@ class GameEventHandler(
                             false,
                         )
                     }
-                    GamePhase.VOTING -> {
-                        hiderInitialX = null
-                        hiderInitialZ = null
-                        hasAlertedMovedTwentyFiveBlocks = false
-                    }
+                    else -> {}
+                }
+            }
+
+            val currentPhase = game.phase
+            if (currentPhase != lastPhase) {
+                val oldPhase = lastPhase
+                lastPhase = currentPhase
+                onPhaseChanged(server, oldPhase, currentPhase)
+            }
+
+            val removalTick = trackerCompassRemovalTick
+            if (removalTick != null && server.tickCount >= removalTick) {
+                trackerCompassRemovalTick = null
+                removeTrackerCompassesFromAll(server)
+                val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
+                if (seeker != null) {
+                    seeker.sendSystemMessage(
+                        Component
+                            .translatable("exservermod.game.tracker_compass_expired")
+                            .withStyle(ChatFormatting.GRAY),
+                    )
+                    playSoundToPlayer(seeker, SoundEvents.ITEM_BREAK, 1.0f, 0.9f)
                 }
             }
 
@@ -451,6 +441,44 @@ class GameEventHandler(
                         }
                     }
                 }
+
+                // Late-game echo-sphere hint (after 10 minutes = 12000 ticks, every 45s = 900 ticks)
+                if (game.elapsedSeekingTicks >= LATE_GAME_HINT_TIME_TICKS &&
+                    (game.elapsedSeekingTicks - LATE_GAME_HINT_TIME_TICKS) % ECHO_SPHERE_INTERVAL_TICKS == 0
+                ) {
+                    val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
+                    if (seeker != null && hider != null) {
+                        if (seeker.level().dimension() == hider.level().dimension()) {
+                            val dir = Vec3(hider.x - seeker.x, (hider.y + 1.0) - seeker.eyeY, hider.z - seeker.z)
+                            val dist = dir.length()
+                            if (dist > SPHERE_STOP_DISTANCE) {
+                                val unit = dir.normalize()
+                                val targetVec = Vec3(hider.x, hider.y + 1.0, hider.z).subtract(unit.scale(SPHERE_STOP_DISTANCE))
+                                val targetBlockPos = BlockPos.containing(targetVec.x, targetVec.y, targetVec.z)
+                                val arrivalTicks = (dist * 1.2).toInt().coerceIn(20, 80)
+                                val serverLevel = seeker.level()
+                                serverLevel.sendParticles(
+                                    VibrationParticleOption(BlockPositionSource(targetBlockPos), arrivalTicks),
+                                    seeker.x,
+                                    seeker.eyeY,
+                                    seeker.z,
+                                    1,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                )
+                                server.playerList.broadcastSystemMessage(
+                                    Component
+                                        .translatable("exservermod.game.echo_sphere_launched")
+                                        .withStyle(ChatFormatting.DARK_AQUA),
+                                    false,
+                                )
+                                playSoundToParticipants(server, SoundEvents.WARDEN_SONIC_BOOM, 0.8f, 1.6f)
+                            }
+                        }
+                    }
+                }
             }
 
             // Anti-stuck reminder for disguised hider
@@ -572,11 +600,42 @@ class GameEventHandler(
         playSoundToParticipants(server, BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), volume, pitch)
     }
 
+    private fun playSoundToPlayer(
+        player: ServerPlayer,
+        sound: Holder<SoundEvent>,
+        volume: Float = 1.0f,
+        pitch: Float = 1.0f,
+    ) {
+        player.connection.send(
+            ClientboundSoundPacket(
+                sound,
+                SoundSource.PLAYERS,
+                player.x,
+                player.y,
+                player.z,
+                volume,
+                pitch,
+                player.level().random.nextLong(),
+            ),
+        )
+    }
+
+    private fun playSoundToPlayer(
+        player: ServerPlayer,
+        sound: SoundEvent,
+        volume: Float = 1.0f,
+        pitch: Float = 1.0f,
+    ) {
+        playSoundToPlayer(player, BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), volume, pitch)
+    }
+
     private fun registerDisconnect() {
         ServerPlayConnectionEvents.DISCONNECT.register { handler, server ->
             disguiseManager.clearDisguise(handler.player)
             BlueMapCompat.setPlayerVisibility(handler.player.uuid, true)
+            removeTrackerCompasses(handler.player)
             if (game.isParticipant(handler.player.uuid)) {
+                clearTrackerCompasses(server)
                 game.leave(handler.player.uuid)
                 server.playerList.broadcastSystemMessage(
                     Component
@@ -592,6 +651,7 @@ class GameEventHandler(
         ServerLifecycleEvents.SERVER_STOPPING.register { server ->
             RouletteManager.clear()
             disguiseManager.clearAll(server)
+            clearTrackerCompasses(server)
             val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
             BlueMapCompat.setPlayersVisibility(participants, true)
         }
@@ -602,6 +662,136 @@ class GameEventHandler(
             ctx.server().execute {
                 RouletteManager.applyDisguise(ctx.player(), disguiseManager)
             }
+        }
+    }
+
+    private fun onPhaseChanged(
+        server: MinecraftServer,
+        oldPhase: GamePhase,
+        newPhase: GamePhase,
+    ) {
+        val participants = listOfNotNull(game.hiderUuid, game.seekerUuid)
+        when (newPhase) {
+            GamePhase.SEEKING -> {
+                BlueMapCompat.setPlayersVisibility(participants, false)
+
+                val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
+                if (seeker != null) {
+                    val emergencyHintBtn =
+                        Component.translatable("exservermod.game.button.hint_emergency").withStyle { style ->
+                            style
+                                .withColor(ChatFormatting.LIGHT_PURPLE)
+                                .withClickEvent(ClickEvent.RunCommand("/games hint"))
+                                .withHoverEvent(
+                                    HoverEvent.ShowText(Component.translatable("exservermod.game.button.hint_emergency.hover")),
+                                )
+                        }
+                    seeker.sendSystemMessage(emergencyHintBtn)
+                }
+
+                val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
+                if (hider != null) {
+                    hiderInitialX = hider.x
+                    hiderInitialZ = hider.z
+                    hasAlertedMovedTwentyFiveBlocks = false
+                }
+
+                if (seeker != null && hider != null) {
+                    grantSectorCompass(server, seeker, hider)
+                }
+            }
+            GamePhase.HIDING -> {
+                BlueMapCompat.setPlayersVisibility(participants, false)
+                hiderInitialX = null
+                hiderInitialZ = null
+                hasAlertedMovedTwentyFiveBlocks = false
+                disguiseManager.resetUnstuckCounters()
+                clearTrackerCompasses(server)
+            }
+            GamePhase.INTERMISSION -> {
+                BlueMapCompat.setPlayersVisibility(participants, true)
+                hiderInitialX = null
+                hiderInitialZ = null
+                hasAlertedMovedTwentyFiveBlocks = false
+                clearTrackerCompasses(server)
+            }
+            GamePhase.IDLE -> {
+                BlueMapCompat.setPlayersVisibility(participants, true)
+                disguiseManager.clearAll(server)
+                hiderInitialX = null
+                hiderInitialZ = null
+                hasAlertedMovedTwentyFiveBlocks = false
+                clearTrackerCompasses(server)
+            }
+            GamePhase.VOTING -> {
+                hiderInitialX = null
+                hiderInitialZ = null
+                hasAlertedMovedTwentyFiveBlocks = false
+                clearTrackerCompasses(server)
+            }
+        }
+    }
+
+    private fun grantSectorCompass(
+        server: MinecraftServer,
+        seeker: ServerPlayer,
+        hider: ServerPlayer,
+    ) {
+        val angle = Random.nextDouble(0.0, 2.0 * Math.PI)
+        val offsetDist = Random.nextDouble(SECTOR_OFFSET_MIN, SECTOR_OFFSET_MAX)
+        val sectorPos =
+            BlockPos(
+                (hider.x + offsetDist * kotlin.math.cos(angle)).toInt(),
+                hider.blockY,
+                (hider.z + offsetDist * kotlin.math.sin(angle)).toInt(),
+            )
+        val targetPos = GlobalPos.of(hider.level().dimension(), sectorPos)
+        val compass = ItemStack(Items.COMPASS)
+        compass.set(DataComponents.LODESTONE_TRACKER, LodestoneTracker(Optional.of(targetPos), false))
+        compass.set(
+            DataComponents.CUSTOM_NAME,
+            Component
+                .translatable("exservermod.game.tracker_compass_name")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+        )
+
+        if (!seeker.inventory.add(compass)) {
+            seeker.drop(compass, false)
+        }
+        seeker.inventoryMenu.broadcastChanges()
+
+        seeker.sendSystemMessage(
+            Component
+                .translatable("exservermod.game.tracker_compass_given")
+                .withStyle(ChatFormatting.GOLD),
+        )
+        playSoundToPlayer(seeker, SoundEvents.ITEM_PICKUP, 1.0f, 1.0f)
+        trackerCompassRemovalTick = server.tickCount + TRACKER_COMPASS_DURATION_TICKS
+    }
+
+    private fun removeTrackerCompassesFromAll(server: MinecraftServer) {
+        for (uuid in listOfNotNull(game.seekerUuid, game.hiderUuid)) {
+            val player = server.playerList.getPlayer(uuid) ?: continue
+            removeTrackerCompasses(player)
+        }
+    }
+
+    private fun clearTrackerCompasses(server: MinecraftServer) {
+        trackerCompassRemovalTick = null
+        removeTrackerCompassesFromAll(server)
+    }
+
+    private fun removeTrackerCompasses(player: ServerPlayer) {
+        var changed = false
+        for (i in 0 until player.inventory.containerSize) {
+            val stack = player.inventory.getItem(i)
+            if (stack.`is`(Items.COMPASS) && stack.has(DataComponents.LODESTONE_TRACKER)) {
+                player.inventory.setItem(i, ItemStack.EMPTY)
+                changed = true
+            }
+        }
+        if (changed) {
+            player.inventoryMenu.broadcastChanges()
         }
     }
 }

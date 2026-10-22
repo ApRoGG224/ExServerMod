@@ -96,5 +96,9 @@
   "exservermod.disguise.button.unstuck": "[ 🌀 Выбраться ]",
   "exservermod.disguise.button.unstuck.hover": "Телепортироваться в ближайшее безопасное место (при застревании)",
   "exservermod.disguise.not_disguised": "[Игры] Вы не замаскированы под моба!",
-  "exservermod.disguise.stuck_reminder": "[Игры] Вы застряли в блоках!"
+  "exservermod.disguise.stuck_reminder": "[Игры] Вы застряли в блоках!",
+  "exservermod.game.tracker_compass_name": "🧭 Компас сектора (30м)",
+  "exservermod.game.tracker_compass_given": "[Прятки] 🧭 Вам выдан Компас сектора на 20 секунд! (Указывает в сектор 30м от цели)",
+  "exservermod.game.tracker_compass_expired": "[Прятки] 🧭 Время действия компаса истекло — компас растворился в воздухе!",
+  "exservermod.game.echo_sphere_launched": "[Прятки] 🔮 Эхо-сфера запущена в сторону прячущегося! (Растворится в 5 блоках от цели)"
 }
