@@ -617,9 +617,11 @@ class GameCommands(
         server: MinecraftServer,
     ) {
         val participants = listOfNotNull(game.hiderUuid, game.seekerUuid, player.uuid)
+        TrackerCompassManager.purgeAll(server)
         val left = game.leave(player.uuid)
         if (left) {
             disguiseManager.clearAll(server)
+            TrackerCompassManager.purgeAll(server)
             BlueMapCompat.setPlayersVisibility(participants, true)
             server.playerList.broadcastSystemMessage(
                 Component

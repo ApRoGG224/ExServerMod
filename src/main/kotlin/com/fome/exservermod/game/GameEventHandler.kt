@@ -39,10 +39,8 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
-import net.minecraft.world.item.component.LodestoneTracker
 import net.minecraft.world.level.gameevent.BlockPositionSource
 import net.minecraft.world.phys.Vec3
-import java.util.Optional
 import kotlin.math.hypot
 import kotlin.random.Random
 
@@ -78,6 +76,7 @@ class GameEventHandler(
         registerServerTick()
         registerJoin()
         registerDisconnect()
+        registerServerStarted()
         registerServerStopping()
         registerRouletteFinished()
     }
@@ -268,7 +267,7 @@ class GameEventHandler(
             val removalTick = trackerCompassRemovalTick
             if (removalTick != null && server.tickCount >= removalTick) {
                 trackerCompassRemovalTick = null
-                removeTrackerCompassesFromAll(server)
+                TrackerCompassManager.purgeAll(server)
                 val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
                 if (seeker != null) {
                     seeker.sendSystemMessage(
@@ -560,10 +559,17 @@ class GameEventHandler(
 
     private fun registerJoin() {
         ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
+            TrackerCompassManager.purgePlayer(handler.player)
             for ((uuid, mobType) in disguiseManager.disguises) {
                 val mobId = BuiltInRegistries.ENTITY_TYPE.getKey(mobType).toString()
                 ServerPlayNetworking.send(handler.player, DisguiseSyncPayload(uuid, mobId, true))
             }
+        }
+    }
+
+    private fun registerServerStarted() {
+        ServerLifecycleEvents.SERVER_STARTED.register { server ->
+            TrackerCompassManager.purgeAll(server)
         }
     }
 
@@ -633,7 +639,7 @@ class GameEventHandler(
         ServerPlayConnectionEvents.DISCONNECT.register { handler, server ->
             disguiseManager.clearDisguise(handler.player)
             BlueMapCompat.setPlayerVisibility(handler.player.uuid, true)
-            removeTrackerCompasses(handler.player)
+            TrackerCompassManager.purgePlayer(handler.player)
             if (game.isParticipant(handler.player.uuid)) {
                 clearTrackerCompasses(server)
                 game.leave(handler.player.uuid)
@@ -746,14 +752,7 @@ class GameEventHandler(
                 (hider.z + offsetDist * kotlin.math.sin(angle)).toInt(),
             )
         val targetPos = GlobalPos.of(hider.level().dimension(), sectorPos)
-        val compass = ItemStack(Items.COMPASS)
-        compass.set(DataComponents.LODESTONE_TRACKER, LodestoneTracker(Optional.of(targetPos), false))
-        compass.set(
-            DataComponents.CUSTOM_NAME,
-            Component
-                .translatable("exservermod.game.tracker_compass_name")
-                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
-        )
+        val compass = TrackerCompassManager.createTrackerCompass(targetPos)
 
         if (!seeker.inventory.add(compass)) {
             seeker.drop(compass, false)
@@ -769,29 +768,8 @@ class GameEventHandler(
         trackerCompassRemovalTick = server.tickCount + TRACKER_COMPASS_DURATION_TICKS
     }
 
-    private fun removeTrackerCompassesFromAll(server: MinecraftServer) {
-        for (uuid in listOfNotNull(game.seekerUuid, game.hiderUuid)) {
-            val player = server.playerList.getPlayer(uuid) ?: continue
-            removeTrackerCompasses(player)
-        }
-    }
-
     private fun clearTrackerCompasses(server: MinecraftServer) {
         trackerCompassRemovalTick = null
-        removeTrackerCompassesFromAll(server)
-    }
-
-    private fun removeTrackerCompasses(player: ServerPlayer) {
-        var changed = false
-        for (i in 0 until player.inventory.containerSize) {
-            val stack = player.inventory.getItem(i)
-            if (stack.`is`(Items.COMPASS) && stack.has(DataComponents.LODESTONE_TRACKER)) {
-                player.inventory.setItem(i, ItemStack.EMPTY)
-                changed = true
-            }
-        }
-        if (changed) {
-            player.inventoryMenu.broadcastChanges()
-        }
+        TrackerCompassManager.purgeAll(server)
     }
 }

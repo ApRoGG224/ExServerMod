@@ -5,10 +5,14 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "EntityDimensionsMixin",
+    "EntityTrackingPositionMixin",
     "ServerEntityMixin",
+    "ServerPlayerDropMixin",
+    "SlotContainerMixin",
     "WalkAnimationStateAccessor"
   ],
   "client": [
+    "AvatarRendererMixin",
     "ClientEntityRenderDispatcherMixin"
   ],
   "injectors": {
