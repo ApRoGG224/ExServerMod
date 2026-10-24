@@ -230,7 +230,7 @@ class GameEventHandler(
 
     private fun registerServerTick() {
         ServerTickEvents.END_SERVER_TICK.register { server ->
-            RouletteManager.checkTimeouts(server, disguiseManager)
+            RouletteManager.checkTimeouts(server, game, disguiseManager)
             val transition = game.tick()
             if (transition is TickResult.PhaseChanged) {
                 when (transition.newPhase) {
