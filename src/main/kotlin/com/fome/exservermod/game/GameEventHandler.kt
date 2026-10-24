@@ -52,13 +52,12 @@ class GameEventHandler(
     private val disguiseManager: DisguiseManager = DisguiseManager(),
 ) {
     companion object {
-        const val HINT_INTERVAL_TICKS = 50 * HideAndSeekGame.TICKS_PER_SECOND // 50 seconds = 1000 ticks
+        const val HINT_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
         const val ACOUSTIC_TAUNT_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
         const val INTELLECTUAL_HINT_INTERVAL_TICKS = 90 * HideAndSeekGame.TICKS_PER_SECOND // 90 seconds = 1800 ticks
-        const val DISTANCE_HINT_INTERVAL_TICKS = 180 * HideAndSeekGame.TICKS_PER_SECOND // 180 seconds = 3600 ticks
         const val TRACKER_COMPASS_DURATION_TICKS = 20 * HideAndSeekGame.TICKS_PER_SECOND // 20 seconds = 400 ticks
-        const val LATE_GAME_HINT_TIME_TICKS = 10 * 60 * HideAndSeekGame.TICKS_PER_SECOND // 10 minutes = 12000 ticks
-        const val ECHO_SPHERE_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
+        const val LATE_GAME_HINT_TIME_TICKS = 5 * 60 * HideAndSeekGame.TICKS_PER_SECOND // 5 minutes = 6000 ticks
+        const val ECHO_PULSE_INTERVAL_TICKS = 30 * HideAndSeekGame.TICKS_PER_SECOND // 30 seconds = 600 ticks
         const val MOVEMENT_ALERT_DISTANCE = 25.0
         const val SECTOR_OFFSET_MIN = 15.0
         const val SECTOR_OFFSET_MAX = 30.0
@@ -70,6 +69,7 @@ class GameEventHandler(
     private var hasAlertedMovedTwentyFiveBlocks: Boolean = false
     private var lastPhase: GamePhase = GamePhase.IDLE
     private var trackerCompassRemovalTick: Int? = null
+    private val hintEngine = HintEngine()
 
     fun register() {
         registerDamageProtection()
@@ -285,6 +285,7 @@ class GameEventHandler(
 
             if (game.phase == GamePhase.SEEKING) {
                 val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
+                val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
 
                 // Elytra invariant: strictly forbidden for hider during seeking phase
                 if (hider != null && hider.isFallFlying) {
@@ -364,24 +365,11 @@ class GameEventHandler(
                     }
                 }
 
-                // Periodic proximity hint (every 50 seconds = 1000 ticks)
+                // Unified periodic hint rotation (every 45 seconds = 900 ticks):
+                // distance every other hint, varied hints from a no-repeat bag
                 if (game.elapsedSeekingTicks > 0 && game.elapsedSeekingTicks % HINT_INTERVAL_TICKS == 0) {
-                    if (hider != null) {
-                        val dim =
-                            hider
-                                .level()
-                                .dimension()
-                                .identifier()
-                                .toString()
-                        val closest = landmarks.findClosest(hider.x, hider.z, dim)
-                        if (closest != null) {
-                            server.playerList.broadcastSystemMessage(
-                                Component
-                                    .translatable("exservermod.landmarks.hint.closest", closest.name)
-                                    .withStyle(ChatFormatting.AQUA),
-                                false,
-                            )
-                        }
+                    if (hider != null && seeker != null) {
+                        broadcastRotatingHint(server, seeker, hider)
                     }
                 }
 
@@ -417,69 +405,14 @@ class GameEventHandler(
                     }
                 }
 
-                // Periodic distance hint (every 3 minutes = 180s = 3600 ticks)
-                if (game.elapsedSeekingTicks > 0 && game.elapsedSeekingTicks % DISTANCE_HINT_INTERVAL_TICKS == 0) {
-                    val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
-                    if (seeker != null && hider != null) {
-                        if (seeker.level().dimension() != hider.level().dimension()) {
-                            server.playerList.broadcastSystemMessage(
-                                Component
-                                    .translatable("exservermod.hideandseek.hint.distance_diff_dimension")
-                                    .withStyle(ChatFormatting.GOLD),
-                                false,
-                            )
-                        } else {
-                            val dx = seeker.x - hider.x
-                            val dy = seeker.y - hider.y
-                            val dz = seeker.z - hider.z
-                            val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
-                            val tier = HideAndSeekGame.calculateDistanceTier(dist)
-                            server.playerList.broadcastSystemMessage(
-                                Component
-                                    .translatable("exservermod.hideandseek.hint.distance", tier)
-                                    .withStyle(ChatFormatting.GOLD),
-                                false,
-                            )
-                            playSoundToParticipants(server, SoundEvents.EXPERIENCE_ORB_PICKUP, 0.8f, 1.2f)
-                        }
-                    }
-                }
-
-                // Late-game echo-sphere hint (after 10 minutes = 12000 ticks, every 45s = 900 ticks)
+                // Late-game echo pulse (after 5 minutes, every 30 seconds):
+                // a glow ray the seeker can literally follow; it dissolves 3 blocks
+                // short of the hider so it never pinpoints the exact spot
                 if (game.elapsedSeekingTicks >= LATE_GAME_HINT_TIME_TICKS &&
-                    (game.elapsedSeekingTicks - LATE_GAME_HINT_TIME_TICKS) % ECHO_SPHERE_INTERVAL_TICKS == 0
+                    (game.elapsedSeekingTicks - LATE_GAME_HINT_TIME_TICKS) % ECHO_PULSE_INTERVAL_TICKS == 0
                 ) {
-                    val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
                     if (seeker != null && hider != null) {
-                        if (seeker.level().dimension() == hider.level().dimension()) {
-                            val dir = Vec3(hider.x - seeker.x, (hider.y + 1.0) - seeker.eyeY, hider.z - seeker.z)
-                            val dist = dir.length()
-                            if (dist > SPHERE_STOP_DISTANCE) {
-                                val unit = dir.normalize()
-                                val targetVec = Vec3(hider.x, hider.y + 1.0, hider.z).subtract(unit.scale(SPHERE_STOP_DISTANCE))
-                                val targetBlockPos = BlockPos.containing(targetVec.x, targetVec.y, targetVec.z)
-                                val arrivalTicks = (dist * 1.2).toInt().coerceIn(20, 80)
-                                val serverLevel = seeker.level()
-                                serverLevel.sendParticles(
-                                    VibrationParticleOption(BlockPositionSource(targetBlockPos), arrivalTicks),
-                                    seeker.x,
-                                    seeker.eyeY,
-                                    seeker.z,
-                                    1,
-                                    0.0,
-                                    0.0,
-                                    0.0,
-                                    0.0,
-                                )
-                                server.playerList.broadcastSystemMessage(
-                                    Component
-                                        .translatable("exservermod.game.echo_sphere_launched")
-                                        .withStyle(ChatFormatting.DARK_AQUA),
-                                    false,
-                                )
-                                playSoundToParticipants(server, SoundEvents.WARDEN_SONIC_BOOM, 0.8f, 1.6f)
-                            }
-                        }
+                        launchEchoPulse(server, seeker, hider)
                     }
                 }
             }
@@ -692,6 +625,7 @@ class GameEventHandler(
         when (newPhase) {
             GamePhase.SEEKING -> {
                 BlueMapCompat.setPlayersVisibility(participants, false)
+                hintEngine.reset()
 
                 val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
                 if (seeker != null) {
