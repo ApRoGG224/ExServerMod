@@ -494,6 +494,133 @@ class GameEventHandler(
         }
     }
 
+
+    private fun broadcastRotatingHint(
+        server: MinecraftServer,
+        seeker: ServerPlayer,
+        hider: ServerPlayer,
+    ) {
+        val hint = hintEngine.nextHint()
+        when (hint.type) {
+            HintEngine.SeekerHintType.DISTANCE -> broadcastDistanceHint(server, seeker, hider)
+            HintEngine.SeekerHintType.VARIED ->
+                when (HintEngine.VariedHint.entries[hint.variedOrdinal]) {
+                    HintEngine.VariedHint.LANDMARK -> broadcastLandmarkHint(server, hider)
+                    HintEngine.VariedHint.BLOCK_UNDER -> broadcastBlockUnderHint(server, hider)
+                    HintEngine.VariedHint.SKY_ACCESS -> broadcastSkyAccessHint(server, hider)
+                    HintEngine.VariedHint.HEIGHT_DIFF -> broadcastHeightDiffHint(server, seeker, hider)
+                }
+        }
+    }
+
+    private fun broadcastDistanceHint(
+        server: MinecraftServer,
+        seeker: ServerPlayer,
+        hider: ServerPlayer,
+    ) {
+        if (seeker.level().dimension() != hider.level().dimension()) {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.hideandseek.hint.distance_diff_dimension")
+                    .withStyle(ChatFormatting.GOLD),
+                false,
+            )
+            return
+        }
+
+        val dist = seeker.position().distanceTo(hider.position())
+        val message =
+            if (dist < CLOSE_DISTANCE_BLOCKS) {
+                Component
+                    .translatable("exservermod.hideandseek.hint.distance_close")
+                    .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
+            } else {
+                val tier = HideAndSeekGame.calculateDistanceTier(dist)
+                Component
+                    .translatable("exservermod.hideandseek.hint.distance", tier)
+                    .withStyle(ChatFormatting.GOLD)
+            }
+        server.playerList.broadcastSystemMessage(message, false)
+        playSoundToParticipants(server, SoundEvents.EXPERIENCE_ORB_PICKUP, 0.8f, 1.2f)
+    }
+
+    private fun broadcastLandmarkHint(
+        server: MinecraftServer,
+        hider: ServerPlayer,
+    ) {
+        val dim =
+            hider
+                .level()
+                .dimension()
+                .identifier()
+                .toString()
+        val closest = landmarks.findClosest(hider.x, hider.z, dim)
+        if (closest != null) {
+            val landmarkDist = hypot(hider.x - closest.x, hider.z - closest.z).toInt()
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.hideandseek.hint.closest_landmark", closest.name, landmarkDist)
+                    .withStyle(ChatFormatting.AQUA),
+                false,
+            )
+        } else {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.hideandseek.hint.no_landmarks")
+                    .withStyle(ChatFormatting.GRAY),
+                false,
+            )
+        }
+    }
+
+    private fun broadcastBlockUnderHint(
+        server: MinecraftServer,
+        hider: ServerPlayer,
+    ) {
+        val below = hider.level().getBlockState(hider.blockPosition().below())
+        server.playerList.broadcastSystemMessage(
+            Component
+                .translatable("exservermod.hideandseek.hint.block_under", below.block.name)
+                .withStyle(ChatFormatting.AQUA),
+            false,
+        )
+    }
+
+    private fun broadcastSkyAccessHint(
+        server: MinecraftServer,
+        hider: ServerPlayer,
+    ) {
+        val openSky = hider.level().canSeeSkyFromBelowWater(hider.blockPosition())
+        val key = if (openSky) "exservermod.hideandseek.hint.sky_open" else "exservermod.hideandseek.hint.sky_hidden"
+        server.playerList.broadcastSystemMessage(
+            Component
+                .translatable(key)
+                .withStyle(ChatFormatting.AQUA),
+            false,
+        )
+    }
+
+    private fun broadcastHeightDiffHint(
+        server: MinecraftServer,
+        seeker: ServerPlayer,
+        hider: ServerPlayer,
+    ) {
+        val dy = kotlin.math.round(hider.y - seeker.y).toInt()
+        val message =
+            when {
+                kotlin.math.abs(dy) <= 2 ->
+                    Component.translatable("exservermod.hideandseek.hint.height_same")
+                dy > 0 ->
+                    Component.translatable("exservermod.hideandseek.hint.height_above", dy)
+                else ->
+                    Component.translatable("exservermod.hideandseek.hint.height_below", -dy)
+            }
+        server.playerList.broadcastSystemMessage(
+            message.withStyle(ChatFormatting.AQUA),
+            false,
+        )
+    }
+
     private fun registerJoin() {
         ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
             TrackerCompassManager.purgePlayer(handler.player)
