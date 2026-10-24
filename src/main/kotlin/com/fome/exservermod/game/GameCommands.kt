@@ -332,6 +332,10 @@ class GameCommands(
         }
 
         val otherPlayer = onlinePlayers.firstOrNull { it.uuid != player.uuid } ?: onlinePlayers[1]
+
+        // Kill any stale roulette wheel from an aborted round before opening a new one
+        RouletteManager.abortAll(server)
+
         when (val result = game.startGameDirectly(player.uuid, otherPlayer.uuid, mode)) {
             is VoteResult.GameStarted -> {
                 if (result.mode == GameMode.MOB) {
