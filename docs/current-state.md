@@ -1,9 +1,20 @@
 # Project Current State
 
 ## Summary
-The project documentation, gameplay rules, testing workflow, and architecture are fully implemented for **ExServerMod** — a Kotlin-only Fabric mod for Minecraft 26.2+ (on Java 25) implementing Hide & Seek, Mob Disguises, Visual Roulette Wheel, and BlueMap stealth synchronization.
+The project documentation, gameplay rules, testing workflow, and architecture are fully implemented for **ExServerMod** — a Kotlin-only Fabric mod for Minecraft 26.2+ (on Java 25) implementing Hide & Seek, Mob Disguises, Visual Roulette Wheel, AFK bot control, Wave Defense, and BlueMap stealth synchronization.
 
 ## Active Status
+**Round 2 (October 2025) — bugfix pass + AFK bot + hint rework + Wave Defense.**
+
+### Round 2 changes
+- **Roulette/game race fixes**: canceling the wheel (ESC) now sends `RouletteCanceledPayload` and aborts the round instead of silently continuing; starting or continuing a round force-closes stale wheels (`CloseRoulettePayload`) and drops pending disguises; `RouletteManager.checkTimeouts` only applies disguises inside an active round for the current hider.
+- **AFK bot (Steve)**: excluded from all mini-games (player picking, 2-player requirement, disconnect cancellation); new `afk/` package with `/afk` command family that teleports the bot to landmarks from the shared `/location-add` list.
+- **Hint rework**: unified 45 s rotation (distance every other hint, no repeats — `HintEngine` shuffled bag with boundary guarantee); new varied hints: block under hider, open sky / underground, height difference; MOB categorical hints no longer repeat until all categories are used.
+- **Echo locator rework**: after 5 minutes every 30 s a glow-ray pulse is drawn from seeker towards the hider, dissolving 3 blocks short of the target; chat aid shows rough distance + compass direction.
+- **Wave Defense (`/waves`)**: new co-op mini-game, 8 vanilla-only waves, champions on boss waves, zero world damage (explosion guard, no door breaking, no gear drops). See [docs/features/wave-defense.md](docs/features/wave-defense.md).
+- **i18n**: full Russian (`ru_ru.json`) + English (`en_us.json`) catalogs; hardcoded fallback names and roulette screen strings removed.
+
+### Previous status
 **All Tasks Completed (100% Ready)**. Tasks 1 through 6 are fully implemented, verified, and tested with 0 errors.
 
 ---
