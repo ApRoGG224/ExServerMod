@@ -33,6 +33,12 @@ object RouletteManager {
 
     fun hasPending(uuid: UUID): Boolean = pendingDisguises.containsKey(uuid)
 
+    fun cancel(uuid: UUID): Boolean {
+        val removed = pendingDisguises.remove(uuid) != null
+        pendingTimestamps.remove(uuid)
+        return removed
+    }
+
     fun applyDisguise(
         player: ServerPlayer,
         disguiseManager: DisguiseManager,
