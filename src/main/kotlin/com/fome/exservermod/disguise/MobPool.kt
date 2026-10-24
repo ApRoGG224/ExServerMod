@@ -411,12 +411,25 @@ object MobPool {
         return getHint(entityType, category)
     }
 
+    /**
+     * Picks the next categorical hint avoiding repeats: categories already
+     * mentioned in this round are skipped; once every category has been used,
+     * the rotation restarts (but never repeats the immediately previous one).
+     */
     fun getNextHint(
         entityType: EntityType<*>,
-        lastCategory: HintCategory?,
+        usedCategories: Collection<HintCategory> = emptyList(),
         random: Random = Random,
     ): Pair<MutableComponent, HintCategory> {
-        val candidates = HintCategory.entries.filter { it != lastCategory }
+        val fresh = HintCategory.entries.filter { it !in usedCategories }
+        val candidates =
+            if (fresh.isEmpty()) {
+                // Full rotation exhausted: restart, avoiding the very last used category
+                val last = usedCategories.lastOrNull()
+                HintCategory.entries.filter { it != last }
+            } else {
+                fresh
+            }
         val category = candidates[random.nextInt(candidates.size)]
         return getHint(entityType, category) to category
     }
