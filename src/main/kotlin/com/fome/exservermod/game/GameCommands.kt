@@ -588,7 +588,7 @@ class GameCommands(
                     val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
                     val mobType = hider?.let { disguiseManager.getDisguise(it.uuid) }
                     if (mobType != null) {
-                        val (hintMsg, category) = MobPool.getNextHint(mobType, game.lastHintCategory)
+                        val (hintMsg, category) = MobPool.getNextHint(mobType, game.hintCategoryHistory)
                         game.recordHintCategory(category)
                         val prefix = Component.translatable("exservermod.game.hint.prefix").withStyle(ChatFormatting.LIGHT_PURPLE)
                         val full = Component.empty().append(prefix).append(hintMsg.withStyle(ChatFormatting.LIGHT_PURPLE))
