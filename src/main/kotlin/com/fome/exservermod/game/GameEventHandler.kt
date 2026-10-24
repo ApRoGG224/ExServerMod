@@ -407,7 +407,7 @@ class GameEventHandler(
                     if (hider != null) {
                         val mob = disguiseManager.getDisguise(hider.uuid)
                         if (mob != null) {
-                            val (hint, category) = MobPool.getNextHint(mob, game.lastHintCategory)
+                            val (hint, category) = MobPool.getNextHint(mob, game.hintCategoryHistory)
                             game.recordHintCategory(category)
                             server.playerList.broadcastSystemMessage(
                                 hint.withStyle(ChatFormatting.LIGHT_PURPLE),
