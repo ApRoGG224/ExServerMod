@@ -25,7 +25,7 @@ import kotlin.random.Random
 
 class RouletteScreen(
     private val payload: OpenRoulettePayload,
-) : Screen(Component.literal("MOB RANDOMIZER")) {
+) : Screen(Component.translatable("exservermod.roulette.screen.title")) {
     private val entityCache = mutableMapOf<String, LivingEntity>()
 
     // Finalist reel: exactly 10 finalists ending on targetMobId
@@ -376,7 +376,7 @@ class RouletteScreen(
         cx: Int,
         topY: Int,
     ) {
-        val titleText = "MOB RANDOMIZER"
+        val titleText = Component.translatable("exservermod.roulette.screen.title").string
 
         // Dramatic multi-layer drop shadow
         extractor.centeredText(font, titleText, cx + 2, topY + 2, 0xAA2A0800.toInt())
@@ -387,11 +387,11 @@ class RouletteScreen(
         // Subtitle status
         val status =
             when {
-                currentTick < TICK_SHOWCASE_END -> "✦ CANDIDATE SHOWCASE ✦"
-                currentTick < TICK_EVAPORATE_END -> "✦ EVAPORATING NON-FINALISTS ✦"
-                currentTick < TICK_CONVERGE_END -> "✦ CONVERGING TO WHEEL ✦"
-                currentTick < TICK_SPIN_STOP -> "✦ SPINNING MOB WHEEL ✦"
-                else -> "★ DISGUISE SELECTED ★"
+                currentTick < TICK_SHOWCASE_END -> Component.translatable("exservermod.roulette.screen.status.showcase").string
+                currentTick < TICK_EVAPORATE_END -> Component.translatable("exservermod.roulette.screen.status.evaporating").string
+                currentTick < TICK_CONVERGE_END -> Component.translatable("exservermod.roulette.screen.status.converging").string
+                currentTick < TICK_SPIN_STOP -> Component.translatable("exservermod.roulette.screen.status.spinning").string
+                else -> Component.translatable("exservermod.roulette.screen.status.selected").string
             }
         val statusColor = if (currentTick >= TICK_SPIN_STOP) 0xFF55FF55.toInt() else 0xFFFFAA00.toInt()
         extractor.centeredText(font, status, cx, topY + 13, statusColor)
