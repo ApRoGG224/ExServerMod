@@ -20,6 +20,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
+import kotlin.math.hypot
 
 class GameCommands(
     private val game: HideAndSeekGame,
@@ -603,17 +604,45 @@ class GameCommands(
                                 .dimension()
                                 .identifier()
                                 .toString()
+
+                        // Emergency hint gives the seeker both distance and landmark
+                        if (player.level().dimension() == hider.level().dimension()) {
+                            val distBlocks = hypot(hider.x - player.x, hider.z - player.z).toInt()
+                            server.playerList.broadcastSystemMessage(
+                                Component
+                                    .translatable("exservermod.hideandseek.hint.seeker_distance", distBlocks)
+                                    .withStyle(ChatFormatting.GOLD),
+                                false,
+                            )
+                        } else {
+                            server.playerList.broadcastSystemMessage(
+                                Component
+                                    .translatable("exservermod.hideandseek.hint.distance_diff_dimension")
+                                    .withStyle(ChatFormatting.GOLD),
+                                false,
+                            )
+                        }
+
                         val closest = landmarkManager?.findClosest(hider.x, hider.z, dim)
                         if (closest != null) {
+                            val landmarkDist = hypot(hider.x - closest.x, hider.z - closest.z).toInt()
                             val prefix = Component.translatable("exservermod.game.hint.prefix").withStyle(ChatFormatting.AQUA)
                             val landmarkMsg =
                                 Component
                                     .translatable(
-                                        "exservermod.landmarks.hint.closest",
+                                        "exservermod.hideandseek.hint.closest_landmark",
                                         closest.name,
+                                        landmarkDist,
                                     ).withStyle(ChatFormatting.AQUA)
                             val full = Component.empty().append(prefix).append(landmarkMsg)
                             server.playerList.broadcastSystemMessage(full, false)
+                        } else {
+                            server.playerList.broadcastSystemMessage(
+                                Component
+                                    .translatable("exservermod.hideandseek.hint.no_landmarks")
+                                    .withStyle(ChatFormatting.GRAY),
+                                false,
+                            )
                         }
                     }
                 }
