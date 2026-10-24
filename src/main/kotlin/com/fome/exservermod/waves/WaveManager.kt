@@ -319,4 +319,174 @@ class WaveManager {
             level.getBlockState(pos.above()).isAir
     }
 
+    private fun onWaveCleared(server: MinecraftServer) {
+        when (val cleared = game.onWaveCleared()) {
+            is WaveTickResult.Victory -> Unit // handled via tick() victory branch
+            is WaveTickResult.PhaseChanged -> {
+                if (cleared.newPhase == WavePhase.INTERMISSION) {
+                    server.playerList.broadcastSystemMessage(
+                        Component
+                            .translatable(
+                                "exservermod.waves.wave_cleared",
+                                game.currentWave,
+                                WaveDefenseGame.INTERMISSION_SECONDS,
+                            ).withStyle(ChatFormatting.GREEN),
+                        false,
+                    )
+                    playSoundToDefenders(server, SoundEvents.PLAYER_LEVELUP, 0.9f, 1.2f)
+                }
+            }
+            else -> {}
+        }
+    }
+
+    private fun onVictory(server: MinecraftServer) {
+        val level = arenaLevel
+        val center = arenaCenter
+
+        clearMobs()
+
+        val defenders = game.defenders.mapNotNull { server.playerList.getPlayer(it) }
+        for (defender in defenders) {
+            val anim = ClientboundSetTitlesAnimationPacket(10, 70, 20)
+            val title =
+                ClientboundSetTitleTextPacket(
+                    Component.translatable("exservermod.waves.victory").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                )
+            val subtitle =
+                ClientboundSetSubtitleTextPacket(
+                    Component
+                        .translatable("exservermod.waves.victory_subtitle", WaveDefenseGame.TOTAL_WAVES, game.kills)
+                        .withStyle(ChatFormatting.YELLOW),
+                )
+            defender.connection.send(anim)
+            defender.connection.send(title)
+            defender.connection.send(subtitle)
+        }
+
+        server.playerList.broadcastSystemMessage(
+            Component
+                .translatable("exservermod.waves.victory_chat", game.kills)
+                .withStyle(ChatFormatting.GOLD),
+            false,
+        )
+
+        if (level != null && center != null) {
+            val fireworkStack = ItemStack(Items.FIREWORK_ROCKET)
+            val explosions =
+                listOf(
+                    FireworkExplosion(
+                        FireworkExplosion.Shape.LARGE_BALL,
+                        IntArrayList(intArrayOf(0xFFD700, 0x00FF88, 0x00E5FF)),
+                        IntArrayList(intArrayOf(0xFFFFFF)),
+                        true,
+                        true,
+                    ),
+                )
+            fireworkStack.set(DataComponents.FIREWORKS, Fireworks(1, explosions))
+            val firework = FireworkRocketEntity(level, center.x, center.y + 1.5, center.z, fireworkStack)
+            level.addFreshEntity(firework)
+
+            ExperienceOrb.award(level, center.add(0.0, 1.0, 0.0), VICTORY_XP)
+            level.playSound(null, center.x, center.y, center.z, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.2f, 1.0f)
+        }
+
+        playSoundToDefenders(server, SoundEvents.PLAYER_LEVELUP, 1.2f, 1.0f)
+    }
+
+    private fun announceWave(
+        server: MinecraftServer,
+        wave: Int,
+        totalWaves: Int,
+        isBoss: Boolean,
+    ) {
+        val key = if (isBoss) "exservermod.waves.wave_announce_boss" else "exservermod.waves.wave_announce"
+        val style = if (isBoss) ChatFormatting.RED to ChatFormatting.BOLD else ChatFormatting.YELLOW to ChatFormatting.BOLD
+        server.playerList.broadcastSystemMessage(
+            Component.translatable(key, wave, totalWaves).withStyle(style.first, style.second),
+            false,
+        )
+        if (isBoss) {
+            playSoundToDefenders(server, SoundEvents.WARDEN_SONIC_BOOM, 1.5f, 1.0f)
+        } else {
+            playSoundToDefenders(server, SoundEvents.RAID_HORN, 1.5f, 1.0f)
+        }
+    }
+
+    private fun renderHud(server: MinecraftServer) {
+        val defenders = game.defenders.mapNotNull { uuid -> server.playerList.getPlayer(uuid) }
+        if (defenders.isEmpty()) {
+            return
+        }
+
+        val message =
+            when (game.phase) {
+                WavePhase.COUNTDOWN -> {
+                    val secondsLeft = game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND
+                    if (secondsLeft in 1..5) {
+                        playSoundToDefenders(server, SoundEvents.NOTE_BLOCK_PLING, 0.8f, 1.1f)
+                    }
+                    Component
+                        .translatable("exservermod.waves.actionbar.countdown", secondsLeft)
+                        .withStyle(ChatFormatting.YELLOW)
+                }
+                WavePhase.FIGHT ->
+                    Component
+                        .translatable(
+                            "exservermod.waves.actionbar.fight",
+                            game.currentWave,
+                            WaveDefenseGame.TOTAL_WAVES,
+                            trackedMobs.size,
+                            game.kills,
+                        ).withStyle(ChatFormatting.RED)
+                WavePhase.INTERMISSION -> {
+                    val secondsLeft = game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND
+                    Component
+                        .translatable("exservermod.waves.actionbar.intermission", game.currentWave + 1, secondsLeft)
+                        .withStyle(ChatFormatting.GREEN)
+                }
+                else -> return
+            }
+
+        for (defender in defenders) {
+            defender.sendSystemMessage(message, true)
+        }
+    }
+
+    private fun playSoundToDefenders(
+        server: MinecraftServer,
+        sound: Holder<SoundEvent>,
+        volume: Float,
+        pitch: Float,
+    ) {
+        for (uuid in game.defenders) {
+            val player = server.playerList.getPlayer(uuid) ?: continue
+            player.connection.send(
+                ClientboundSoundPacket(
+                    sound,
+                    SoundSource.PLAYERS,
+                    player.x,
+                    player.y,
+                    player.z,
+                    volume,
+                    pitch,
+                    player.level().random.nextLong(),
+                ),
+            )
+        }
+    }
+
+    private fun playSoundToDefenders(
+        server: MinecraftServer,
+        sound: SoundEvent,
+        volume: Float,
+        pitch: Float,
+    ) {
+        playSoundToDefenders(server, BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), volume, pitch)
+    }
+
+    /**
+     * Debug/diagnostic helper: number of currently tracked wave mobs.
+     */
+    fun trackedMobCount(): Int = trackedMobs.size
 }
