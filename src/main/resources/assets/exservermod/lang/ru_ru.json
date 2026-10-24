@@ -26,7 +26,7 @@
   "exservermod.game.vote.unknown_mode": "[Игры] Неизвестный режим '%s'. Доступны: classic, mob.",
   "exservermod.game.vote.recorded": "[Игры] %s проголосовал за %s (%s/%s голосов).",
   "exservermod.game.vote.started": "[Игры] Выбран режим %s! Игра начинается.",
-  "exservermod.game.vote.need_two_players": "[Игры] Для начала пряток нужно минимум 2 игрока на сервере!",
+  "exservermod.game.vote.need_two_players": "[Игры] Для начала пряток нужно минимум 2 игрока (не считая АФК-бота)!",
   "exservermod.game.players_assigned": "[Игры] Прячется: %s | Ищет: %s",
   "exservermod.game.hiding_announcement": "[Игры] Время прятаться: %s с. Прячущийся, займите укрытие!",
   "exservermod.game.vote.mismatch": "[Игры] Голоса не совпали! Выберите одинаковый режим.",
