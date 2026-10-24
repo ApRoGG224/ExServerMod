@@ -219,13 +219,27 @@ class DisguiseTest {
 
     @Test
     fun `test getNextHint avoids consecutive identical categories`() {
-        var lastCategory: HintCategory? = null
+        val history = mutableListOf<HintCategory>()
         for (i in 1..100) {
-            val (hint, category) = MobPool.getNextHint(EntityTypes.ZOMBIE, lastCategory)
+            val (hint, category) = MobPool.getNextHint(EntityTypes.ZOMBIE, history)
             assertNotNull(hint)
-            assertTrue(category != lastCategory, "Consecutive hints must have different categories")
-            lastCategory = category
+            assertTrue(category != history.lastOrNull(), "Consecutive hints must have different categories")
+            history.add(category)
         }
+    }
+
+    @Test
+    fun `test getNextHint does not repeat until all categories exhausted`() {
+        // Fresh categories must be exhausted before any category shows up twice
+        val history = mutableListOf<HintCategory>()
+        repeat(HintCategory.entries.size) {
+            val (_, category) = MobPool.getNextHint(EntityTypes.SHEEP, history)
+            assertFalse(category in history, "Category $category must not repeat while fresh ones remain")
+            history.add(category)
+        }
+        // Rotation restarts after exhaustion but still avoids immediate repeats
+        val (_, nextAfterExhaustion) = MobPool.getNextHint(EntityTypes.SHEEP, history)
+        assertTrue(nextAfterExhaustion != history.last(), "After exhaustion the last category must be avoided")
     }
 
     @Test
