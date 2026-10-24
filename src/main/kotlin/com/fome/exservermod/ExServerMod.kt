@@ -1,5 +1,6 @@
 package com.fome.exservermod
 
+import com.fome.exservermod.afk.AfkCommands
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.game.GameCommands
 import com.fome.exservermod.game.GameEventHandler
@@ -34,6 +35,8 @@ object ExServerMod : ModInitializer {
         LandmarkManager(configFile)
     }
 
+    val waveManager = WaveManager()
+
     override fun onInitialize() {
         logger.info("[ExServerMod] Initializing server mod.")
 
@@ -48,7 +51,9 @@ object ExServerMod : ModInitializer {
         GameEventHandler(game, landmarkManager, disguiseManager).register()
         GameCommands(game, disguiseManager, landmarkManager).register()
         LandmarkCommands(landmarkManager).register()
+        AfkCommands(landmarkManager).register()
+        waveManager.register()
 
-        logger.info("[ExServerMod] Core game, disguise engine, and landmarks initialized.")
+        logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot control, and wave defense initialized.")
     }
 }
