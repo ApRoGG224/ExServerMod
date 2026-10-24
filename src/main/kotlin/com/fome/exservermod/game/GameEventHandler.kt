@@ -239,7 +239,9 @@ class GameEventHandler(
                     GamePhase.SEEKING -> {
                         playSoundToParticipants(server, SoundEvents.RAID_HORN, 2.0f, 1.0f)
                         val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
-                        val seekerName = seeker?.name?.string ?: "Seeker"
+                        val seekerName =
+                            seeker?.name?.string
+                                ?: Component.translatable("exservermod.game.fallback.seeker").string
                         server.playerList.broadcastSystemMessage(
                             Component
                                 .translatable("exservermod.game.seeking_announcement", seekerName)
@@ -532,7 +534,7 @@ class GameEventHandler(
                                 .getPlayer(it)
                                 ?.name
                                 ?.string
-                        } ?: "Искатель"
+                        } ?: Component.translatable("exservermod.game.fallback.seeker").string
                     val msg =
                         Component
                             .translatable("exservermod.game.actionbar.seeking", timeFormatted, seekerName)
@@ -547,7 +549,7 @@ class GameEventHandler(
                                 .getPlayer(it)
                                 ?.name
                                 ?.string
-                        } ?: "Прячущийся"
+                        } ?: Component.translatable("exservermod.game.fallback.hider").string
                     val msg =
                         Component
                             .translatable("exservermod.game.actionbar.intermission", nextHiderName, secondsLeft)
