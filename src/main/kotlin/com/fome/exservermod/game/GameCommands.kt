@@ -442,6 +442,9 @@ class GameCommands(
     ) {
         val continued = game.continueNextRound(player.uuid)
         if (continued) {
+            // Close any stale wheel before re-rolling the disguise for the new hider
+            RouletteManager.abortAll(server)
+
             if (game.mode == GameMode.MOB) {
                 val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
                 if (hider != null) {
