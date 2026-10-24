@@ -6,6 +6,7 @@ import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.DisguiseSyncPayload
+import com.fome.exservermod.network.RouletteCanceledPayload
 import com.fome.exservermod.network.RouletteFinishedPayload
 import it.unimi.dsi.fastutil.ints.IntArrayList
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
@@ -743,6 +744,28 @@ class GameEventHandler(
                 hiderInitialZ = null
                 hasAlertedMovedTwentyFiveBlocks = false
                 clearTrackerCompasses(server)
+            }
+        }
+
+        // Player closed the wheel without finishing it: drop the pending disguise
+        // and abort the round instead of silently continuing it.
+        ServerPlayNetworking.registerGlobalReceiver(RouletteCanceledPayload.TYPE) { _, ctx ->
+            ctx.server().execute {
+                val player = ctx.player()
+                val hadPending = RouletteManager.cancel(player.uuid)
+                if (hadPending && game.isGameActive() && player.uuid == game.hiderUuid) {
+                    val participants = listOfNotNull(game.hiderUuid, game.seekerUuid, player.uuid)
+                    clearTrackerCompasses(ctx.server())
+                    game.leave(player.uuid)
+                    disguiseManager.clearAll(ctx.server())
+                    BlueMapCompat.setPlayersVisibility(participants, true)
+                    ctx.server().playerList.broadcastSystemMessage(
+                        Component
+                            .translatable("exservermod.game.cancelled_roulette", player.name.string)
+                            .withStyle(ChatFormatting.GRAY),
+                        false,
+                    )
+                }
             }
         }
     }
