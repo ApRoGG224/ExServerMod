@@ -629,6 +629,8 @@ class GameCommands(
         TrackerCompassManager.purgeAll(server)
         val left = game.leave(player.uuid)
         if (left) {
+            // A canceled round must also drop the pending disguise and close open wheels
+            RouletteManager.abortAll(server)
             disguiseManager.clearAll(server)
             TrackerCompassManager.purgeAll(server)
             BlueMapCompat.setPlayersVisibility(participants, true)
