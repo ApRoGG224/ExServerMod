@@ -38,6 +38,12 @@ class RouletteScreen(
 
     // Timing constants (20 ticks = 1 sec)
     companion object {
+        /**
+         * Server-initiated force close has no direct accessor for the current
+         * screen in 26.2, so the open wheel registers itself here.
+         */
+        var currentScreen: RouletteScreen? = null
+
         const val TICK_SHOWCASE_END = 30 // 1.5s
         const val TICK_EVAPORATE_END = 55 // 1.25s
         const val TICK_CONVERGE_END = 75 // 1.0s
@@ -63,6 +69,8 @@ class RouletteScreen(
     private val sparkles = mutableListOf<SparkleParticle>()
 
     init {
+        currentScreen = this
+
         // Build 10 distinct finalists including the target mob
         val otherCandidates =
             payload.mobCandidates
@@ -233,13 +241,39 @@ class RouletteScreen(
         onClose()
     }
 
+    /**
+     * Server-initiated close (game aborted / new round started). Must not send
+     * a cancel payload back to the server.
+     */
+    fun forceClose() {
+        forceClosed = true
+        onClose()
+    }
+
     override fun onClose() {
+        currentScreen = null
+        // Player dismissed the wheel without finishing it: tell the server so the
+        // pending disguise is dropped and the round is aborted instead of continuing.
+        if (!finishedSent && !forceClosed) {
+            try {
+                ClientPlayNetworking.send(RouletteCanceledPayload())
+            } catch (_: Throwable) {
+            }
+        }
         spinSoundInstance?.let {
             minecraft.soundManager.stop(it)
         }
         entityCache.values.forEach { it.discard() }
         entityCache.clear()
         super.onClose()
+    }
+
+    override fun removed() {
+        // Screen replaced without onClose (e.g. another GUI opened on top)
+        if (currentScreen === this) {
+            currentScreen = null
+        }
+        super.removed()
     }
 
     private fun spawnConfettiExplosion(
