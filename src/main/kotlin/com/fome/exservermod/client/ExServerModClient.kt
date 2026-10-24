@@ -1,5 +1,6 @@
 package com.fome.exservermod.client
 
+import com.fome.exservermod.network.CloseRoulettePayload
 import com.fome.exservermod.network.DisguiseSyncPayload
 import com.fome.exservermod.network.OpenRoulettePayload
 import net.fabricmc.api.ClientModInitializer
@@ -11,6 +12,12 @@ class ExServerModClient : ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(OpenRoulettePayload.TYPE) { payload, ctx ->
             ctx.client().execute {
                 ctx.client().setScreenAndShow(RouletteScreen(payload))
+            }
+        }
+
+        ClientPlayNetworking.registerGlobalReceiver(CloseRoulettePayload.TYPE) { _, ctx ->
+            ctx.client().execute {
+                RouletteScreen.currentScreen?.forceClose()
             }
         }
 
