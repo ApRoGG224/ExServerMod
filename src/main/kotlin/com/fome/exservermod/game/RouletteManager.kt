@@ -53,17 +53,20 @@ object RouletteManager {
 
     fun checkTimeouts(
         server: MinecraftServer,
+        game: HideAndSeekGame,
         disguiseManager: DisguiseManager,
     ) {
         val now = System.currentTimeMillis()
         for ((uuid, timestamp) in pendingTimestamps) {
             if (now - timestamp > TIMEOUT_MS) {
                 val player = server.playerList.getPlayer(uuid)
-                if (player != null) {
+                // Stale wheel: game aborted or roles changed while the screen was open.
+                // Never apply a disguise outside an active round for its current hider.
+                val stillValid = game.isGameActive() && uuid == game.hiderUuid
+                if (player != null && stillValid) {
                     applyDisguise(player, disguiseManager)
                 } else {
-                    pendingDisguises.remove(uuid)
-                    pendingTimestamps.remove(uuid)
+                    cancel(uuid)
                 }
             }
         }
