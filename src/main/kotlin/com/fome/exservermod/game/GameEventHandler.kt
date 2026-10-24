@@ -21,7 +21,7 @@ import net.minecraft.core.BlockPos
 import net.minecraft.core.GlobalPos
 import net.minecraft.core.Holder
 import net.minecraft.core.component.DataComponents
-import net.minecraft.core.particles.VibrationParticleOption
+import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
@@ -41,7 +41,6 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
-import net.minecraft.world.level.gameevent.BlockPositionSource
 import net.minecraft.world.phys.Vec3
 import kotlin.math.hypot
 import kotlin.random.Random
@@ -61,7 +60,9 @@ class GameEventHandler(
         const val MOVEMENT_ALERT_DISTANCE = 25.0
         const val SECTOR_OFFSET_MIN = 15.0
         const val SECTOR_OFFSET_MAX = 30.0
-        const val SPHERE_STOP_DISTANCE = 5.0
+        const val ECHO_STOP_DISTANCE = 3.0
+        const val ECHO_RAY_STEP = 1.5
+        const val CLOSE_DISTANCE_BLOCKS = 5.0
     }
 
     private var hiderInitialX: Double? = null
@@ -494,7 +495,6 @@ class GameEventHandler(
         }
     }
 
-
     private fun broadcastRotatingHint(
         server: MinecraftServer,
         seeker: ServerPlayer,
@@ -621,6 +621,71 @@ class GameEventHandler(
         )
     }
 
+    /**
+     * Reworked echo locator: instead of a single wobbly vibration, draws a
+     * straight glow ray from the seeker towards the hider that dissolves
+     * ECHO_STOP_DISTANCE blocks short of the target. Easy to follow visually.
+     */
+    private fun launchEchoPulse(
+        server: MinecraftServer,
+        seeker: ServerPlayer,
+        hider: ServerPlayer,
+    ) {
+        if (seeker.level().dimension() != hider.level().dimension()) {
+            return
+        }
+
+        val start = Vec3(seeker.x, seeker.eyeY, seeker.z)
+        val target = Vec3(hider.x, hider.y + 1.0, hider.z)
+        val delta = target.subtract(start)
+        val dist = delta.length()
+        if (dist <= ECHO_STOP_DISTANCE + 1.0) {
+            return
+        }
+
+        val unit = delta.normalize()
+        val end = target.subtract(unit.scale(ECHO_STOP_DISTANCE))
+        val length = start.distanceTo(end)
+        val steps = (length / ECHO_RAY_STEP).toInt().coerceIn(4, 48)
+        val level = seeker.level()
+
+        var i = 0
+        while (i <= steps) {
+            val t = i.toDouble() / steps
+            val p = start.add(unit.scale(length * t))
+            level.sendParticles(ParticleTypes.GLOW, p.x, p.y, p.z, 1, 0.05, 0.05, 0.05, 0.0)
+            i++
+        }
+        level.sendParticles(ParticleTypes.ELECTRIC_SPARK, end.x, end.y, end.z, 12, 0.25, 0.25, 0.25, 0.02)
+        level.sendParticles(ParticleTypes.SONIC_BOOM, end.x, end.y, end.z, 1, 0.0, 0.0, 0.0, 0.0)
+
+        // Text aid for the seeker: rough distance plus compass direction
+        val directionKey = compassDirectionKey(unit.x, unit.z)
+        seeker.sendSystemMessage(
+            Component
+                .translatable(
+                    "exservermod.game.echo_pulse_launched",
+                    dist.toInt(),
+                    Component.translatable(directionKey),
+                ).withStyle(ChatFormatting.DARK_AQUA),
+            false,
+        )
+        playSoundToParticipants(server, SoundEvents.WARDEN_SONIC_BOOM, 0.8f, 1.6f)
+    }
+
+    /**
+     * Maps a 2D direction vector to one of 8 compass keys (0 = north ... 7 = northwest).
+     */
+    private fun compassDirectionKey(
+        dx: Double,
+        dz: Double,
+    ): String {
+        val angle = Math.toDegrees(kotlin.math.atan2(dx, -dz))
+        val normalized = (angle + 360.0 + 22.5) % 360.0
+        val index = (normalized / 45.0).toInt().coerceIn(0, 7)
+        return "exservermod.hideandseek.hint.dir.$index"
+    }
+
     private fun registerJoin() {
         ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
             TrackerCompassManager.purgePlayer(handler.player)
@@ -741,6 +806,28 @@ class GameEventHandler(
                 RouletteManager.applyDisguise(ctx.player(), disguiseManager)
             }
         }
+
+        // Player closed the wheel without finishing it: drop the pending disguise
+        // and abort the round instead of silently continuing it.
+        ServerPlayNetworking.registerGlobalReceiver(RouletteCanceledPayload.TYPE) { _, ctx ->
+            ctx.server().execute {
+                val player = ctx.player()
+                val hadPending = RouletteManager.cancel(player.uuid)
+                if (hadPending && game.isGameActive() && player.uuid == game.hiderUuid) {
+                    val participants = listOfNotNull(game.hiderUuid, game.seekerUuid, player.uuid)
+                    clearTrackerCompasses(ctx.server())
+                    game.leave(player.uuid)
+                    disguiseManager.clearAll(ctx.server())
+                    BlueMapCompat.setPlayersVisibility(participants, true)
+                    ctx.server().playerList.broadcastSystemMessage(
+                        Component
+                            .translatable("exservermod.game.cancelled_roulette", player.name.string)
+                            .withStyle(ChatFormatting.GRAY),
+                        false,
+                    )
+                }
+            }
+        }
     }
 
     private fun onPhaseChanged(
@@ -807,28 +894,6 @@ class GameEventHandler(
                 hiderInitialZ = null
                 hasAlertedMovedTwentyFiveBlocks = false
                 clearTrackerCompasses(server)
-            }
-        }
-
-        // Player closed the wheel without finishing it: drop the pending disguise
-        // and abort the round instead of silently continuing it.
-        ServerPlayNetworking.registerGlobalReceiver(RouletteCanceledPayload.TYPE) { _, ctx ->
-            ctx.server().execute {
-                val player = ctx.player()
-                val hadPending = RouletteManager.cancel(player.uuid)
-                if (hadPending && game.isGameActive() && player.uuid == game.hiderUuid) {
-                    val participants = listOfNotNull(game.hiderUuid, game.seekerUuid, player.uuid)
-                    clearTrackerCompasses(ctx.server())
-                    game.leave(player.uuid)
-                    disguiseManager.clearAll(ctx.server())
-                    BlueMapCompat.setPlayersVisibility(participants, true)
-                    ctx.server().playerList.broadcastSystemMessage(
-                        Component
-                            .translatable("exservermod.game.cancelled_roulette", player.name.string)
-                            .withStyle(ChatFormatting.GRAY),
-                        false,
-                    )
-                }
             }
         }
     }
