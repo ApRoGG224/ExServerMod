@@ -1,5 +1,6 @@
 package com.fome.exservermod.game
 
+import com.fome.exservermod.afk.AfkManager
 import com.fome.exservermod.compat.bluemap.BlueMapCompat
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
@@ -319,7 +320,8 @@ class GameCommands(
         server: MinecraftServer,
         mode: GameMode,
     ) {
-        val onlinePlayers = server.playerList.players
+        // AFK chunk-loader bot must never be dragged into mini-games
+        val onlinePlayers = server.playerList.players.filter { !AfkManager.isBotPlayer(it) }
         if (onlinePlayers.size < 2) {
             player.sendSystemMessage(
                 Component
