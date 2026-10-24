@@ -1,7 +1,9 @@
 package com.fome.exservermod.game
 
 import com.fome.exservermod.disguise.DisguiseManager
+import com.fome.exservermod.network.CloseRoulettePayload
 import it.unimi.dsi.fastutil.ints.IntArrayList
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.core.component.DataComponents
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.server.MinecraftServer
@@ -75,6 +77,17 @@ object RouletteManager {
     fun clear() {
         pendingDisguises.clear()
         pendingTimestamps.clear()
+    }
+
+    fun closeAllWheels(server: MinecraftServer) {
+        for (player in server.playerList.players) {
+            ServerPlayNetworking.send(player, CloseRoulettePayload())
+        }
+    }
+
+    fun abortAll(server: MinecraftServer) {
+        clear()
+        closeAllWheels(server)
     }
 
     private fun spawnCelebrationEffects(player: ServerPlayer) {
