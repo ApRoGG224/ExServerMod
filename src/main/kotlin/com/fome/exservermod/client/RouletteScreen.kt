@@ -1,6 +1,7 @@
 package com.fome.exservermod.client
 
 import com.fome.exservermod.network.OpenRoulettePayload
+import com.fome.exservermod.network.RouletteCanceledPayload
 import com.fome.exservermod.network.RouletteFinishedPayload
 import com.fome.exservermod.sound.ModSounds
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
@@ -63,6 +64,7 @@ class RouletteScreen(
     private var revealPlayed = false
     private var spinSoundInstance: SimpleSoundInstance? = null
     private var finishedSent = false
+    private var forceClosed = false
 
     // Particle systems
     private val confetti = mutableListOf<ConfettiParticle>()
