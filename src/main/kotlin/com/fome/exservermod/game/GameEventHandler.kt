@@ -1,5 +1,6 @@
 package com.fome.exservermod.game
 
+import com.fome.exservermod.afk.AfkManager
 import com.fome.exservermod.compat.bluemap.BlueMapCompat
 import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.disguise.MobPool
@@ -640,8 +641,16 @@ class GameEventHandler(
             disguiseManager.clearDisguise(handler.player)
             BlueMapCompat.setPlayerVisibility(handler.player.uuid, true)
             TrackerCompassManager.purgePlayer(handler.player)
+
+            // Carpet fake players (AFK bot) fire this on /player kill or server
+            // restart; they must never tear down an active round.
+            if (AfkManager.isBotPlayer(handler.player)) {
+                return@register
+            }
+
             if (game.isParticipant(handler.player.uuid)) {
                 clearTrackerCompasses(server)
+                RouletteManager.abortAll(server)
                 game.leave(handler.player.uuid)
                 server.playerList.broadcastSystemMessage(
                     Component
