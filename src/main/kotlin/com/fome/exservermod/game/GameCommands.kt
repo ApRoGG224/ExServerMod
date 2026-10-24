@@ -259,7 +259,7 @@ class GameCommands(
                             .getPlayer(it)
                             ?.name
                             ?.string
-                    } ?: "Seeker"
+                    } ?: Component.translatable("exservermod.game.fallback.seeker").string
                 player.sendSystemMessage(
                     Component
                         .translatable("exservermod.game.status.intermission", winnerName)
@@ -360,12 +360,12 @@ class GameCommands(
                     server.playerList
                         .getPlayer(result.hiderUuid)
                         ?.name
-                        ?.string ?: "Hider"
+                        ?.string ?: Component.translatable("exservermod.game.fallback.hider").string
                 val seekerName =
                     server.playerList
                         .getPlayer(result.seekerUuid)
                         ?.name
-                        ?.string ?: "Seeker"
+                        ?.string ?: Component.translatable("exservermod.game.fallback.seeker").string
 
                 server.playerList.broadcastSystemMessage(
                     Component
@@ -467,14 +467,14 @@ class GameCommands(
                         .getPlayer(it)
                         ?.name
                         ?.string
-                } ?: "Hider"
+                } ?: Component.translatable("exservermod.game.fallback.hider").string
             val seekerName =
                 game.seekerUuid?.let {
                     server.playerList
                         .getPlayer(it)
                         ?.name
                         ?.string
-                } ?: "Seeker"
+                } ?: Component.translatable("exservermod.game.fallback.seeker").string
 
             server.playerList.broadcastSystemMessage(
                 Component
