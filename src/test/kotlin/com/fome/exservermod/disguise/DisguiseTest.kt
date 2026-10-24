@@ -159,8 +159,8 @@ class DisguiseTest {
         assertEquals(1800, GameEventHandler.INTELLECTUAL_HINT_INTERVAL_TICKS)
         assertEquals(90, GameEventHandler.INTELLECTUAL_HINT_INTERVAL_TICKS / HideAndSeekGame.TICKS_PER_SECOND)
 
-        assertEquals(1000, GameEventHandler.HINT_INTERVAL_TICKS)
-        assertEquals(50, GameEventHandler.HINT_INTERVAL_TICKS / HideAndSeekGame.TICKS_PER_SECOND)
+        assertEquals(900, GameEventHandler.HINT_INTERVAL_TICKS)
+        assertEquals(45, GameEventHandler.HINT_INTERVAL_TICKS / HideAndSeekGame.TICKS_PER_SECOND)
     }
 
     @Test
