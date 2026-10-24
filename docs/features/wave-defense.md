@@ -6,6 +6,11 @@ vanilla mobs near the starting point. Designed for the FoMe SMP duo (+ optional
 AFK bot spectator). Zero world damage: creeper explosions are cancelled for
 game-spawned mobs, zombies never break doors, champions never drop their gear.
 
+> **Planned evolution:** a dedicated Halloween arena location, ultra-hard
+> challenge balance, custom mob attacks, and nametag-driven resource-pack mob
+> reskins (broom witches, ghost creepers). Full write-up in
+> [../ideas.md](../ideas.md).
+
 ## Commands
 - `/waves` / `/waves status` — status and start/stop buttons.
 - `/waves start` — arms the arena at the caller's position. All real players
