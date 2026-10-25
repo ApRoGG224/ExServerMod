@@ -55,7 +55,7 @@ class WaveDefenseGameTest {
         assertEquals(1, started.wave)
         assertEquals(WaveDefenseGame.TOTAL_WAVES, started.totalWaves)
         assertEquals(WavePhase.FIGHT, game.phase)
-        assertEquals(4, WaveDefenseGame.totalMobsInWave(started.groups), "Wave 1 must have 4 zombies")
+        assertEquals(20, WaveDefenseGame.totalMobsInWave(started.groups), "Wave 1 must have 20 mobs")
     }
 
     @Test
@@ -146,7 +146,6 @@ class WaveDefenseGameTest {
         val game = WaveDefenseGame()
         game.start(listOf(defender1))
 
-        // During countdown wave-clear signals are meaningless
         assertEquals(WaveTickResult.None, game.onWaveCleared())
         assertEquals(WavePhase.COUNTDOWN, game.phase)
     }
@@ -179,7 +178,6 @@ class WaveDefenseGameTest {
 
     @Test
     fun `test wave composition is vanilla and zero grief`() {
-        // Every wave must be present and use only whitelisted vanilla mobs
         val allowed =
             setOf(
                 "minecraft:zombie",
@@ -189,6 +187,10 @@ class WaveDefenseGameTest {
                 "minecraft:creeper",
                 "minecraft:witch",
                 "minecraft:drowned",
+                "minecraft:vex",
+                "minecraft:blaze",
+                "minecraft:wither_skeleton",
+                "minecraft:stray",
             )
         val forbidden = setOf("minecraft:wither", "minecraft:ghast", "minecraft:ravager", "minecraft:ender_dragon")
 
@@ -204,22 +206,27 @@ class WaveDefenseGameTest {
     }
 
     @Test
-    fun `test boss waves are champions`() {
+    fun `test boss waves include champions and bosses`() {
         assertTrue(WaveDefenseGame.isBossWave(5))
+        assertTrue(WaveDefenseGame.isBossWave(8))
         assertTrue(WaveDefenseGame.isBossWave(WaveDefenseGame.TOTAL_WAVES))
         assertFalse(WaveDefenseGame.isBossWave(1))
         assertFalse(WaveDefenseGame.isBossWave(6))
 
+        val wave5 = WaveDefenseGame.buildWave(5)
+        assertTrue(wave5.any { it.role == WaveMobRole.BLAZE_CHAMPION }, "Wave 5 must include Blaze Champion")
+
+        val wave8 = WaveDefenseGame.buildWave(8)
+        assertTrue(wave8.any { it.role == WaveMobRole.WITCH_CHAMPION }, "Wave 8 must include Witch Champion")
+
         val finalWave = WaveDefenseGame.buildWave(WaveDefenseGame.TOTAL_WAVES)
-        assertTrue(finalWave.any { it.isChampion }, "The final wave must include champions")
-        val boss5 = WaveDefenseGame.buildWave(5)
-        assertTrue(boss5.any { it.isChampion }, "Wave 5 must include a champion")
+        assertTrue(finalWave.any { it.role == WaveMobRole.BLAZE_CHAMPION }, "Wave 11 must include Blaze Champion")
+        assertTrue(finalWave.any { it.role == WaveMobRole.WITCH_CHAMPION }, "Wave 11 must include Witch Champion")
+        assertTrue(finalWave.any { it.role == WaveMobRole.CHAMPION }, "Wave 11 must include Dread Champion")
     }
 
     @Test
     fun `test unknown wave composition falls back to victory`() {
-        // buildWave is only called with 1..TOTAL_WAVES, but the machine must
-        // degrade safely for any other number
         assertTrue(WaveDefenseGame.buildWave(0).isEmpty())
         assertTrue(WaveDefenseGame.buildWave(WaveDefenseGame.TOTAL_WAVES + 1).isEmpty())
     }

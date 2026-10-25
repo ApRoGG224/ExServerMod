@@ -9,6 +9,7 @@
     "ServerEntityMixin",
     "ServerPlayerDropMixin",
     "SlotContainerMixin",
+    "SmallFireballMixin",
     "WalkAnimationStateAccessor"
   ],
   "client": [

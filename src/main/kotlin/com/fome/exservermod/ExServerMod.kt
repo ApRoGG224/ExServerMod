@@ -13,6 +13,7 @@ import com.fome.exservermod.network.OpenRoulettePayload
 import com.fome.exservermod.network.RouletteCanceledPayload
 import com.fome.exservermod.network.RouletteFinishedPayload
 import com.fome.exservermod.sound.ModSounds
+import com.fome.exservermod.waves.WaveCommands
 import com.fome.exservermod.waves.WaveManager
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
@@ -52,6 +53,7 @@ object ExServerMod : ModInitializer {
         GameCommands(game, disguiseManager, landmarkManager).register()
         LandmarkCommands(landmarkManager).register()
         AfkCommands(landmarkManager).register()
+        WaveCommands(landmarkManager).register()
         waveManager.register()
 
         logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot control, and wave defense initialized.")

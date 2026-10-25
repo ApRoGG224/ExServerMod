@@ -4,15 +4,21 @@ import com.fome.exservermod.ExServerMod
 import com.fome.exservermod.afk.AfkManager
 import com.fome.exservermod.game.GamePhase
 import com.fome.exservermod.game.RouletteManager
+import com.fome.exservermod.landmarks.LandmarkManager
+import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.minecraft.ChatFormatting
 import net.minecraft.commands.Commands
+import net.minecraft.commands.SharedSuggestionProvider
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.phys.Vec3
 
-class WaveCommands {
+class WaveCommands(
+    private val landmarkManager: LandmarkManager,
+) {
     fun register() {
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
             dispatcher.register(
@@ -25,6 +31,32 @@ class WaveCommands {
                         }
                         1
                     }.then(
+                        Commands
+                            .literal("start")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleStart(player, null)
+                                }
+                                1
+                            }.then(
+                                Commands
+                                    .argument("landmark", StringArgumentType.string())
+                                    .suggests { _, builder ->
+                                        SharedSuggestionProvider.suggest(
+                                            landmarkManager.getAllLandmarks().map { "\"${it.name}\"" },
+                                            builder,
+                                        )
+                                    }.executes { ctx ->
+                                        val player = ctx.source.player
+                                        val landmark = StringArgumentType.getString(ctx, "landmark")
+                                        if (player != null) {
+                                            handleStart(player, landmark)
+                                        }
+                                        1
+                                    },
+                            ),
+                    ).then(
                         Commands
                             .literal("stop")
                             .executes { ctx ->
@@ -82,7 +114,10 @@ class WaveCommands {
         }
     }
 
-    private fun handleStart(player: ServerPlayer) {
+    private fun handleStart(
+        player: ServerPlayer,
+        landmarkName: String?,
+    ) {
         val server = player.level().server
 
         if (ExServerMod.game.isGameActive() || ExServerMod.game.phase == GamePhase.INTERMISSION) {
@@ -92,7 +127,7 @@ class WaveCommands {
             return
         }
 
-        // AFK chunk-loader bot must never be dragged into wave defense
+        // AFK bot Steve is excluded from wave defense
         val defenders = server.playerList.players.filter { !AfkManager.isBotPlayer(it) }
         if (defenders.isEmpty()) {
             player.sendSystemMessage(
@@ -105,21 +140,60 @@ class WaveCommands {
         RouletteManager.abortAll(server)
         ExServerMod.disguiseManager.clearAll(server)
 
-        if (!ExServerMod.waveManager.tryStart(player, defenders)) {
+        var arenaPos: Vec3? = null
+        var displayArenaName: String? = null
+
+        if (landmarkName != null) {
+            val clean = landmarkName.trim().removeSurrounding("\"")
+            val lm = landmarkManager.getLandmark(clean)
+            if (lm == null) {
+                player.sendSystemMessage(
+                    Component.translatable("exservermod.afk.landmark_not_found", clean).withStyle(ChatFormatting.RED),
+                )
+                return
+            }
+            arenaPos = Vec3(lm.x, player.y, lm.z)
+            displayArenaName = lm.name
+        } else {
+            // Check for pre-built arena landmarks if no argument was passed
+            val defaultLm =
+                landmarkManager.getLandmark("mansion")
+                    ?: landmarkManager.getLandmark("arena")
+                    ?: landmarkManager.getLandmark("horde")
+            if (defaultLm != null) {
+                arenaPos = Vec3(defaultLm.x, player.y, defaultLm.z)
+                displayArenaName = defaultLm.name
+            }
+        }
+
+        if (!ExServerMod.waveManager.tryStart(player, defenders, arenaPos)) {
             player.sendSystemMessage(
                 Component.translatable("exservermod.waves.error.already_running").withStyle(ChatFormatting.RED),
             )
             return
         }
 
-        server.playerList.broadcastSystemMessage(
-            Component
-                .translatable(
-                    "exservermod.waves.started",
-                    WaveDefenseGame.TOTAL_WAVES,
-                ).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
-            false,
-        )
+        if (displayArenaName != null) {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable(
+                        "exservermod.waves.started_arena",
+                        displayArenaName,
+                        WaveDefenseGame.TOTAL_WAVES,
+                    ).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                false,
+            )
+        } else {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable(
+                        "exservermod.waves.started",
+                        WaveDefenseGame.TOTAL_WAVES,
+                    ).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                false,
+            )
+        }
+
         server.playerList.broadcastSystemMessage(
             Component.translatable("exservermod.waves.started_hint").withStyle(ChatFormatting.YELLOW),
             false,
@@ -136,7 +210,7 @@ class WaveCommands {
             return
         }
 
-        val stopBtn =
+        val startBtn =
             Component.translatable("exservermod.waves.button.start").withStyle { style ->
                 style
                     .withColor(ChatFormatting.GREEN)
@@ -148,7 +222,7 @@ class WaveCommands {
                 .translatable("exservermod.waves.stopped_by", player.name.string)
                 .withStyle(ChatFormatting.GRAY)
                 .append(" ")
-                .append(stopBtn),
+                .append(startBtn),
             false,
         )
     }

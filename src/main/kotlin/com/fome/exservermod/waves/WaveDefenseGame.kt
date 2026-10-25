@@ -10,15 +10,26 @@ enum class WavePhase {
     VICTORY,
 }
 
+enum class WaveMobRole {
+    STANDARD,
+    CHAMPION,
+    BLAZE_CHAMPION,
+    WITCH_CHAMPION,
+    GHOST_CREEPER,
+    SPECTRAL_VEX,
+}
+
 /**
- * One spawn group of a wave: vanilla mob id plus how many to spawn.
- * Champions get vanilla diamond gear and bonus health, no custom items.
+ * One spawn group of a wave: vanilla mob id, spawn count, and role/mechanics archetype.
  */
 data class WaveSpawnGroup(
     val mobId: String,
     val count: Int,
-    val isChampion: Boolean = false,
-)
+    val role: WaveMobRole = WaveMobRole.STANDARD,
+) {
+    val isChampion: Boolean
+        get() = role != WaveMobRole.STANDARD
+}
 
 sealed interface WaveTickResult {
     data object None : WaveTickResult
@@ -39,7 +50,7 @@ sealed interface WaveTickResult {
 
 /**
  * Pure state machine for the mob-wave defense mini-game.
- * No Minecraft classes here so the whole flow is unit-testable.
+ * Zero Minecraft classes here so the whole flow is unit-testable.
  *
  * Flow: IDLE -> COUNTDOWN -> FIGHT -> (INTERMISSION -> FIGHT)* -> VICTORY -> IDLE.
  */
@@ -47,66 +58,111 @@ class WaveDefenseGame {
     companion object {
         const val TICKS_PER_SECOND = 20
         const val COUNTDOWN_SECONDS = 15
-        const val INTERMISSION_SECONDS = 8
+        const val INTERMISSION_SECONDS = 15
         const val VICTORY_SECONDS = 20
         const val COUNTDOWN_TICKS = COUNTDOWN_SECONDS * TICKS_PER_SECOND
         const val INTERMISSION_TICKS = INTERMISSION_SECONDS * TICKS_PER_SECOND
         const val VICTORY_TICKS = VICTORY_SECONDS * TICKS_PER_SECOND
-        const val TOTAL_WAVES = 8
+        const val TOTAL_WAVES = 11
 
         /**
-         * Vanilla-only, zero-grief wave composition. No withers, no ghasts,
-         * no block-breaking mobs. Creepers spawn with explosion radius 0:
-         * they still swell and boom but destroy nothing and hurt no one.
+         * 11-wave nightmare gauntlet. Vanilla living hostile mobs only; zero world damage.
+         * Creepers spawn with explosion radius 0 and lingering spectral clouds.
+         * Vexes phase through mansion walls. Blazes and Witches cast non-destructive spectral spells.
          */
         fun buildWave(wave: Int): List<WaveSpawnGroup> =
             when (wave) {
-                1 -> listOf(WaveSpawnGroup("minecraft:zombie", 4))
+                1 ->
+                    listOf(
+                        WaveSpawnGroup("minecraft:zombie", 10),
+                        WaveSpawnGroup("minecraft:skeleton", 6),
+                        WaveSpawnGroup("minecraft:spider", 4),
+                    )
                 2 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:zombie", 3),
-                        WaveSpawnGroup("minecraft:skeleton", 2),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:zombie", 6),
+                        WaveSpawnGroup("minecraft:cave_spider", 4),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 3 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:spider", 3),
-                        WaveSpawnGroup("minecraft:zombie", 3),
+                        WaveSpawnGroup("minecraft:witch", 4),
+                        WaveSpawnGroup("minecraft:drowned", 8),
+                        WaveSpawnGroup("minecraft:skeleton", 6),
+                        WaveSpawnGroup("minecraft:spider", 4),
                     )
                 4 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:skeleton", 3),
-                        WaveSpawnGroup("minecraft:zombie", 3),
-                        WaveSpawnGroup("minecraft:cave_spider", 2),
+                        WaveSpawnGroup("minecraft:vex", 6, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:stray", 8),
+                        WaveSpawnGroup("minecraft:zombie", 8),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 5 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:zombie", 1, isChampion = true),
-                        WaveSpawnGroup("minecraft:zombie", 4),
+                        WaveSpawnGroup("minecraft:blaze", 1, WaveMobRole.BLAZE_CHAMPION),
+                        WaveSpawnGroup("minecraft:blaze", 6),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                        WaveSpawnGroup("minecraft:skeleton", 6),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 6 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:creeper", 2),
-                        WaveSpawnGroup("minecraft:zombie", 3),
-                        WaveSpawnGroup("minecraft:skeleton", 3),
+                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:drowned", 8),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
                     )
                 7 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:witch", 1),
-                        WaveSpawnGroup("minecraft:skeleton", 3),
-                        WaveSpawnGroup("minecraft:drowned", 3),
+                        WaveSpawnGroup("minecraft:cave_spider", 12),
+                        WaveSpawnGroup("minecraft:spider", 6),
+                        WaveSpawnGroup("minecraft:zombie", 8),
+                        WaveSpawnGroup("minecraft:vex", 6, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:witch", 4),
                     )
                 8 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:zombie", 1, isChampion = true),
-                        WaveSpawnGroup("minecraft:skeleton", 1, isChampion = true),
-                        WaveSpawnGroup("minecraft:spider", 3),
-                        WaveSpawnGroup("minecraft:creeper", 2),
-                        WaveSpawnGroup("minecraft:zombie", 3),
+                        WaveSpawnGroup("minecraft:witch", 1, WaveMobRole.WITCH_CHAMPION),
+                        WaveSpawnGroup("minecraft:witch", 6),
+                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
+                    )
+                9 ->
+                    listOf(
+                        WaveSpawnGroup("minecraft:zombie", 1, WaveMobRole.CHAMPION),
+                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:stray", 8),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                        WaveSpawnGroup("minecraft:drowned", 6),
+                    )
+                10 ->
+                    listOf(
+                        WaveSpawnGroup("minecraft:zombie", 2, WaveMobRole.CHAMPION),
+                        WaveSpawnGroup("minecraft:blaze", 6),
+                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:witch", 6),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                    )
+                11 ->
+                    listOf(
+                        WaveSpawnGroup("minecraft:blaze", 1, WaveMobRole.BLAZE_CHAMPION),
+                        WaveSpawnGroup("minecraft:witch", 1, WaveMobRole.WITCH_CHAMPION),
+                        WaveSpawnGroup("minecraft:zombie", 2, WaveMobRole.CHAMPION),
+                        WaveSpawnGroup("minecraft:vex", 10, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:blaze", 6),
+                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                        WaveSpawnGroup("minecraft:witch", 6),
                     )
                 else -> emptyList()
             }
 
-        fun isBossWave(wave: Int): Boolean = wave == 5 || wave == TOTAL_WAVES
+        fun isBossWave(wave: Int): Boolean = wave == 5 || wave == 8 || wave == TOTAL_WAVES
 
         fun totalMobsInWave(groups: List<WaveSpawnGroup>): Int = groups.sumOf { it.count }
     }
@@ -144,7 +200,7 @@ class WaveDefenseGame {
 
     /**
      * Called by the manager when every mob of the current wave is dead.
-     * Advances to VICTORY on the final wave, otherwise starts INTERMISSION.
+     * Advances to VICTORY on wave 11, otherwise starts INTERMISSION.
      */
     fun onWaveCleared(): WaveTickResult {
         if (phase != WavePhase.FIGHT) {
@@ -204,12 +260,10 @@ class WaveDefenseGame {
         val nextWave = currentWave + 1
         val groups = buildWave(nextWave)
         if (groups.isEmpty()) {
-            // Defensive: unknown wave number means instant victory
             currentWave = nextWave
             return finishVictory()
         }
 
-        val oldPhase = phase
         currentWave = nextWave
         phase = WavePhase.FIGHT
 

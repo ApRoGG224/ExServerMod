@@ -6,10 +6,14 @@ planning new rounds.
 
 ---
 
-## Wave Defense: Halloween Challenge Arena (planned for Halloween)
+## Wave Defense: Halloween Challenge Arena (IMPLEMENTED — Round 3, 2026-10)
 
-The owner has ONE dedicated location in the world reserved for wave defense.
-The plan is to turn `/waves` into an ultra-hard, Halloween-themed challenge.
+Implemented in Round 3:
+- Dedicated arena landmark binding via `/waves start [landmark]`.
+- 11-wave nightmare balance with raid-style bossbar and hardcore permadeath.
+- Custom mobs & attacks: Blaze champion (Hellfire barrage + Infernal heat wave), Witch champion (Broom dash + Potion volleys + Coven curse), Ghost creepers (Lingering spectral darkness/slowness cloud, 0 block damage), Spectral vexes (phasing through walls).
+- Anti-turtle Evoker fangs targeting stationary defenders in the mansion.
+- Nametags formatted with regex-friendly identifiers for resource-pack reskins (`ex_blaze_champion`, `ex_witch_champion`, `ex_ghost_creeper`, `ex_spectral_vex`).
 
 ### 1. Dedicated Halloween arena
 - The arena is a pre-built, hand-made location — not the sender's position.

@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.Holder
 import net.minecraft.core.component.DataComponents
+import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.MutableComponent
@@ -18,21 +19,37 @@ import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.resources.Identifier
 import net.minecraft.server.MinecraftServer
+import net.minecraft.server.level.ServerBossEvent
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
+import net.minecraft.world.BossEvent
+import net.minecraft.world.effect.MobEffectInstance
+import net.minecraft.world.effect.MobEffects
+import net.minecraft.world.entity.AreaEffectCloud
+import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.ExperienceOrb
+import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.ai.attributes.Attributes
+import net.minecraft.world.entity.monster.Blaze
 import net.minecraft.world.entity.monster.Creeper
+import net.minecraft.world.entity.monster.Witch
+import net.minecraft.world.entity.monster.zombie.Zombie
+import net.minecraft.world.entity.projectile.EvokerFangs
 import net.minecraft.world.entity.projectile.FireworkRocketEntity
+import net.minecraft.world.entity.projectile.Projectile
+import net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
+import net.minecraft.world.item.alchemy.PotionContents
+import net.minecraft.world.item.alchemy.Potions
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
 import net.minecraft.world.level.levelgen.Heightmap
@@ -46,28 +63,67 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Server-side glue for the wave defense mini-game: spawning vanilla mobs,
- * zero-grief explosion guard, cleanup, rewards, and action bar HUD.
+ * Server-side engine for the wave defense mini-game:
+ * 11 nightmare waves, raid bossbar, custom mob mechanics (Blaze champion, Witch coven,
+ * Ghost creeper lingering cloud, Spectral vexes), permadeath failure with spectral dissolve,
+ * anti-turtle wall-piercing attacks for mansion hideouts, zero world damage, and rewards.
  */
 class WaveManager {
     companion object {
-        const val SPAWN_RING_MIN = 10.0
-        const val SPAWN_RING_MAX = 18.0
-        const val CHAMPION_BONUS_HEALTH = 40.0
-        const val VICTORY_XP = 250
+        const val SPAWN_RING_MIN = 12.0
+        const val SPAWN_RING_MAX = 22.0
+        const val VICTORY_XP = 750
         const val CLEANUP_CHECK_INTERVAL_TICKS = 20
+        const val TAG_WAVE_MOB = "ex_wave_mob"
+        const val TAG_WAVE_PROJECTILE = "ex_wave_projectile"
+
+        private var activeInstance: WaveManager? = null
+
+        @JvmStatic
+        fun isWaveProjectile(entity: Entity): Boolean {
+            if (entity.entityTags().contains(TAG_WAVE_PROJECTILE)) {
+                return true
+            }
+            if (entity is Projectile) {
+                val owner = entity.owner
+                if (owner != null && activeInstance?.trackedMobs?.contains(owner.uuid) == true) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        @JvmStatic
+        fun isTrackedMob(uuid: UUID): Boolean = activeInstance?.trackedMobs?.contains(uuid) == true
     }
 
-    private val game = WaveDefenseGame()
+    init {
+        activeInstance = this
+    }
+
+    val game = WaveDefenseGame()
 
     /** Mobs spawned by the current wave, keyed by entity UUID. */
-    private val trackedMobs: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+    val trackedMobs: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
-    /**
-     * Zero world damage for creepers: their private explosionRadius field is
-     * zeroed via reflection, so they still swell and boom but destroy nothing
-     * and hurt no one. If the field ever moves, creepers are skipped entirely.
-     */
+    /** Roles of tracked mobs for custom AI/abilities. */
+    private val trackedMobRoles: MutableMap<UUID, WaveMobRole> = ConcurrentHashMap()
+
+    /** Total mobs expected in the current wave (used for boss bar progress). */
+    private var currentWaveTotalMobs: Int = 0
+
+    /** Raid-style boss bar displayed to defenders. */
+    private val bossBar: ServerBossEvent =
+        ServerBossEvent(
+            UUID.randomUUID(),
+            Component.empty(),
+            BossEvent.BossBarColor.RED,
+            BossEvent.BossBarOverlay.NOTCHED_10,
+        ).apply {
+            isVisible = false
+        }
+
+    /** Zero world damage for creepers: zeroing their explosionRadius via reflection. */
     private val creeperRadiusField: Field? by lazy {
         try {
             Creeper::class.java.getDeclaredField("explosionRadius").apply { isAccessible = true }
@@ -79,9 +135,20 @@ class WaveManager {
     private var arenaCenter: Vec3? = null
     private var arenaLevel: ServerLevel? = null
 
+    // Ability cooldown timers (in ticks)
+    private var blazeHellfireTimer: Int = 0
+    private var blazeHeatWaveTimer: Int = 0
+    private var witchVolleyTimer: Int = 0
+    private var witchDashTimer: Int = 0
+    private var antiTurtleTimer: Int = 0
+    private var potionIndex: Int = 0
+
+    // Defender position tracker to detect camping inside mansion rooms (stationary > 8s)
+    private val defenderStationaryTicks: MutableMap<UUID, Pair<Vec3, Int>> = ConcurrentHashMap()
+
     fun register() {
         registerTick()
-        registerMobDeath()
+        registerEntityDeath()
         registerServerStopping()
     }
 
@@ -91,6 +158,17 @@ class WaveManager {
                 is WaveTickResult.WaveStarted -> spawnWave(server, result)
                 is WaveTickResult.Victory -> onVictory(server)
                 else -> {}
+            }
+
+            if (game.isActive()) {
+                updateBossBar(server)
+            } else if (bossBar.isVisible) {
+                bossBar.removeAllPlayers()
+                bossBar.isVisible = false
+            }
+
+            if (game.isFighting()) {
+                tickAbilities(server)
             }
 
             if (server.tickCount % CLEANUP_CHECK_INTERVAL_TICKS == 0) {
@@ -110,16 +188,34 @@ class WaveManager {
                 }
             }
 
-            if (server.tickCount % WaveDefenseGame.TICKS_PER_SECOND == 0) {
+            if (server.tickCount % WaveDefenseGame.TICKS_PER_SECOND == 0 && game.isActive()) {
                 renderHud(server)
             }
         }
     }
 
-    private fun registerMobDeath() {
+    private fun registerEntityDeath() {
         ServerLivingEntityEvents.AFTER_DEATH.register { entity, _ ->
+            val server = entity.level().server ?: return@register
+
+            // Hardcore permadeath: death of ANY defender ends the defense immediately!
+            if (entity is ServerPlayer && game.isActive() && game.defenders.contains(entity.uuid)) {
+                onDefenderDied(server, entity)
+                return@register
+            }
+
             if (trackedMobs.remove(entity.uuid)) {
+                val role = trackedMobRoles.remove(entity.uuid)
                 game.registerKill()
+
+                // Ghost creeper death / explosion creates lingering spectral cloud
+                if (role == WaveMobRole.GHOST_CREEPER) {
+                    spawnGhostCloud(entity)
+                }
+
+                if (game.isFighting() && trackedMobs.isEmpty()) {
+                    onWaveCleared(server)
+                }
             }
         }
     }
@@ -127,6 +223,8 @@ class WaveManager {
     private fun registerServerStopping() {
         ServerLifecycleEvents.SERVER_STOPPING.register { _ ->
             clearMobs()
+            bossBar.removeAllPlayers()
+            bossBar.isVisible = false
             game.stop()
         }
     }
@@ -134,13 +232,32 @@ class WaveManager {
     fun tryStart(
         source: ServerPlayer,
         defenders: List<ServerPlayer>,
+        customCenter: Vec3? = null,
     ): Boolean {
         if (game.isActive()) {
             return false
         }
-        arenaCenter = source.position()
-        arenaLevel = source.level() as? ServerLevel ?: return false
-        return game.start(defenders.map { it.uuid })
+        val level = source.level()
+        arenaCenter = customCenter ?: source.position()
+        arenaLevel = level
+        currentWaveTotalMobs = 0
+        blazeHellfireTimer = 0
+        blazeHeatWaveTimer = 0
+        witchVolleyTimer = 0
+        witchDashTimer = 0
+        antiTurtleTimer = 0
+        potionIndex = 0
+        defenderStationaryTicks.clear()
+
+        val started = game.start(defenders.map { it.uuid })
+        if (started) {
+            bossBar.isVisible = true
+            bossBar.removeAllPlayers()
+            for (player in defenders) {
+                bossBar.addPlayer(player)
+            }
+        }
+        return started
     }
 
     fun tryStop(server: MinecraftServer): Boolean {
@@ -168,8 +285,90 @@ class WaveManager {
         reason: MutableComponent,
     ) {
         clearMobs()
+        bossBar.removeAllPlayers()
+        bossBar.isVisible = false
         game.stop()
         server.playerList.broadcastSystemMessage(reason.withStyle(ChatFormatting.GRAY), false)
+    }
+
+    /**
+     * Permadeath handler: when ONE defender dies, the run is terminated.
+     * All wave mobs dissolve into vapor/particles with ghost sounds.
+     */
+    private fun onDefenderDied(
+        server: MinecraftServer,
+        fallenDefender: ServerPlayer,
+    ) {
+        if (!game.isActive()) return
+        val currentWave = game.currentWave
+        val kills = game.kills
+        val defendersList = game.defenders.toSet() + fallenDefender.uuid
+
+        // Dissolve all wave mobs with vapor and ghost audio cues
+        dissolveAllMobsWithSpookyEffects()
+
+        bossBar.removeAllPlayers()
+        bossBar.isVisible = false
+        game.stop()
+
+        for (uuid in defendersList) {
+            val player = server.playerList.getPlayer(uuid) ?: continue
+            val anim = ClientboundSetTitlesAnimationPacket(10, 90, 20)
+            val title =
+                ClientboundSetTitleTextPacket(
+                    Component
+                        .translatable("exservermod.waves.defeat_title")
+                        .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD),
+                )
+            val subtitle =
+                ClientboundSetSubtitleTextPacket(
+                    Component
+                        .translatable(
+                            "exservermod.waves.defeat_subtitle",
+                            fallenDefender.name.string,
+                            currentWave,
+                            WaveDefenseGame.TOTAL_WAVES,
+                        ).withStyle(ChatFormatting.RED),
+                )
+            player.connection.send(anim)
+            player.connection.send(title)
+            player.connection.send(subtitle)
+        }
+
+        playSoundToDefenders(server, SoundEvents.WITHER_DEATH, 1.2f, 0.6f)
+        playSoundToDefenders(server, SoundEvents.VEX_DEATH, 1.5f, 0.8f)
+
+        server.playerList.broadcastSystemMessage(
+            Component
+                .translatable(
+                    "exservermod.waves.defeat_chat",
+                    fallenDefender.name.string,
+                    currentWave,
+                    WaveDefenseGame.TOTAL_WAVES,
+                    kills,
+                ).withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+            false,
+        )
+    }
+
+    private fun dissolveAllMobsWithSpookyEffects() {
+        val level = arenaLevel ?: return
+        for (uuid in trackedMobs) {
+            val entity = level.getEntity(uuid)
+            if (entity is LivingEntity && entity.isAlive) {
+                val cx = entity.x
+                val cy = entity.y + entity.bbHeight / 2.0
+                val cz = entity.z
+                level.sendParticles(ParticleTypes.POOF, cx, cy, cz, 30, 0.4, 0.4, 0.4, 0.08)
+                level.sendParticles(ParticleTypes.CLOUD, cx, cy, cz, 20, 0.3, 0.3, 0.3, 0.05)
+                level.sendParticles(ParticleTypes.SOUL, cx, cy, cz, 15, 0.2, 0.25, 0.2, 0.05)
+                level.playSound(null, cx, cy, cz, SoundEvents.SOUL_ESCAPE, SoundSource.HOSTILE, 1.0f, 1.2f)
+                level.playSound(null, cx, cy, cz, SoundEvents.FIRE_EXTINGUISH, SoundSource.HOSTILE, 0.8f, 1.5f)
+                entity.discard()
+            }
+        }
+        trackedMobs.clear()
+        trackedMobRoles.clear()
     }
 
     private fun clearMobs() {
@@ -183,9 +382,9 @@ class WaveManager {
             }
         }
         trackedMobs.clear()
+        trackedMobRoles.clear()
     }
 
-    /** Removes mobs that died without the death event or got unloaded/removed. */
     private fun reapMissingMobs() {
         val level = arenaLevel ?: return
         val iterator = trackedMobs.iterator()
@@ -194,6 +393,7 @@ class WaveManager {
             val entity = level.getEntity(uuid)
             if (entity == null || !entity.isAlive) {
                 iterator.remove()
+                trackedMobRoles.remove(uuid)
                 game.registerKill()
             }
         }
@@ -206,24 +406,25 @@ class WaveManager {
         val level = arenaLevel ?: return
         val center = arenaCenter ?: return
 
+        currentWaveTotalMobs = WaveDefenseGame.totalMobsInWave(result.groups)
         announceWave(server, result.wave, result.totalWaves, WaveDefenseGame.isBossWave(result.wave))
 
         var spawnedAny = false
         for (group in result.groups) {
-            val mobId =
-                Identifier.tryParse(group.mobId) ?: continue
+            val mobId = Identifier.tryParse(group.mobId) ?: continue
             val mobType = BuiltInRegistries.ENTITY_TYPE.getOptional(mobId).orElse(null) ?: continue
             repeat(group.count) {
                 val pos = findSpawnPos(level, center) ?: return@repeat
-                val mob = spawnMob(level, mobType, pos, group.isChampion) ?: return@repeat
+                val mob = spawnMob(level, mobType, pos, group.role) ?: return@repeat
                 trackedMobs.add(mob.uuid)
+                trackedMobRoles[mob.uuid] = group.role
                 spawnedAny = true
             }
         }
 
         if (!spawnedAny) {
-            // Nothing could be spawned (blocked arena) - treat wave as cleared to avoid a stuck fight
             trackedMobs.clear()
+            trackedMobRoles.clear()
             onWaveCleared(server)
         }
     }
@@ -232,73 +433,437 @@ class WaveManager {
         level: ServerLevel,
         mobType: EntityType<*>,
         pos: BlockPos,
-        isChampion: Boolean,
+        role: WaveMobRole,
     ): Mob? {
         val mob = mobType.create(level, EntitySpawnReason.EVENT) as? Mob ?: return null
 
-        // Zero world damage: creepers still swell and pop but destroy nothing
+        // Zero world damage for creepers
         if (mob is Creeper) {
-            val field = creeperRadiusField
-            if (field == null) {
-                // Cannot guarantee a harmless explosion - skip this creeper
-                return null
-            }
+            val field = creeperRadiusField ?: return null
             field.setInt(mob, 0)
+        }
+
+        // Prevent zombies from breaking doors in the arena
+        if (mob is Zombie) {
+            mob.setCanBreakDoors(false)
         }
 
         mob.setPos(pos.x + 0.5, pos.y.toDouble(), pos.z + 0.5)
         mob.yRot = Random.nextFloat() * 360f
         mob.xRot = 0f
         mob.setPersistenceRequired()
+        mob.addTag(TAG_WAVE_MOB)
 
-        if (isChampion) {
-            mob.setCustomName(Component.translatable("exservermod.waves.champion_name").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
-            mob.setCustomNameVisible(true)
-            mob.getAttribute(Attributes.MAX_HEALTH)?.let { attribute ->
-                attribute.baseValue = CHAMPION_BONUS_HEALTH
-            }
-            mob.setHealth(CHAMPION_BONUS_HEALTH.toFloat())
+        // Ensure wave mobs never drop gear or disrupt survival economy
+        for (slot in EquipmentSlot.entries) {
+            mob.setDropChance(slot, 0.0f)
+        }
 
-            val gear =
-                mapOf(
-                    EquipmentSlot.HEAD to Items.DIAMOND_HELMET,
-                    EquipmentSlot.CHEST to Items.DIAMOND_CHESTPLATE,
-                    EquipmentSlot.LEGS to Items.DIAMOND_LEGGINGS,
-                    EquipmentSlot.FEET to Items.DIAMOND_BOOTS,
-                    EquipmentSlot.MAINHAND to Items.DIAMOND_SWORD,
-                )
-            for ((slot, item) in gear) {
-                mob.setItemSlot(slot, ItemStack(item))
-                // No economy impact: champions never drop their gear
-                mob.setDropChance(slot, 0.0f)
-            }
+        when (role) {
+            WaveMobRole.BLAZE_CHAMPION -> configureBlazeChampion(mob)
+            WaveMobRole.WITCH_CHAMPION -> configureWitchChampion(mob)
+            WaveMobRole.GHOST_CREEPER -> configureGhostCreeper(mob)
+            WaveMobRole.CHAMPION -> configureDreadChampion(mob)
+            WaveMobRole.SPECTRAL_VEX -> configureSpectralVex(mob)
+            WaveMobRole.STANDARD -> configureStandardMob(mob)
         }
 
         level.addFreshEntity(mob)
         return mob
     }
 
+    private fun configureBlazeChampion(mob: Mob) {
+        mob.setCustomName(
+            Component
+                .translatable("exservermod.waves.mob.blaze_champion")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+        )
+        mob.setCustomNameVisible(true)
+        mob.addTag("ex_blaze_champion")
+
+        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 120.0 }
+        mob.health = 120.0f
+        mob.getAttribute(Attributes.ARMOR)?.let { it.baseValue = 10.0 }
+        mob.getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.let { it.baseValue = 0.8 }
+        mob.addEffect(MobEffectInstance(MobEffects.GLOWING, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+    }
+
+    private fun configureWitchChampion(mob: Mob) {
+        mob.setCustomName(
+            Component
+                .translatable("exservermod.waves.mob.witch_champion")
+                .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.BOLD),
+        )
+        mob.setCustomNameVisible(true)
+        mob.addTag("ex_witch_champion")
+
+        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 140.0 }
+        mob.health = 140.0f
+        mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.32 }
+        mob.getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.let { it.baseValue = 0.7 }
+        mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.BRUSH))
+        mob.setDropChance(EquipmentSlot.MAINHAND, 0.0f)
+        mob.addEffect(MobEffectInstance(MobEffects.GLOWING, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+    }
+
+    private fun configureGhostCreeper(mob: Mob) {
+        mob.setCustomName(
+            Component
+                .translatable("exservermod.waves.mob.ghost_creeper")
+                .withStyle(ChatFormatting.DARK_AQUA, ChatFormatting.BOLD),
+        )
+        mob.setCustomNameVisible(true)
+        mob.addTag("ex_ghost_creeper")
+        mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.28 }
+    }
+
+    private fun configureDreadChampion(mob: Mob) {
+        mob.setCustomName(
+            Component
+                .translatable("exservermod.waves.mob.dread_champion")
+                .withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+        )
+        mob.setCustomNameVisible(true)
+        mob.addTag("ex_dread_champion")
+
+        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 90.0 }
+        mob.health = 90.0f
+        mob.getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.let { it.baseValue = 0.75 }
+
+        val gear =
+            mapOf(
+                EquipmentSlot.HEAD to Items.DIAMOND_HELMET,
+                EquipmentSlot.CHEST to Items.DIAMOND_CHESTPLATE,
+                EquipmentSlot.LEGS to Items.DIAMOND_LEGGINGS,
+                EquipmentSlot.FEET to Items.DIAMOND_BOOTS,
+                EquipmentSlot.MAINHAND to Items.DIAMOND_SWORD,
+            )
+        for ((slot, item) in gear) {
+            mob.setItemSlot(slot, ItemStack(item))
+            mob.setDropChance(slot, 0.0f)
+        }
+    }
+
+    private fun configureSpectralVex(mob: Mob) {
+        mob.setCustomName(
+            Component
+                .translatable("exservermod.waves.mob.spectral_vex")
+                .withStyle(ChatFormatting.AQUA),
+        )
+        mob.setCustomNameVisible(true)
+        mob.addTag("ex_spectral_vex")
+        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 24.0 }
+        mob.health = 24.0f
+    }
+
+    private fun configureStandardMob(mob: Mob) {
+        // Elite gear on higher waves
+        if (game.currentWave >= 6 && mob is Zombie && Random.nextFloat() < 0.4f) {
+            mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.IRON_CHESTPLATE))
+            mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.IRON_SWORD))
+            mob.setDropChance(EquipmentSlot.CHEST, 0.0f)
+            mob.setDropChance(EquipmentSlot.MAINHAND, 0.0f)
+        }
+    }
+
+    private fun spawnGhostCloud(entity: LivingEntity) {
+        val level = entity.level() as? ServerLevel ?: return
+        val cloud =
+            AreaEffectCloud(level, entity.x, entity.y, entity.z).apply {
+                radius = 3.8f
+                duration = 180
+                waitTime = 0
+                setCustomParticle(ParticleTypes.SQUID_INK)
+                addEffect(MobEffectInstance(MobEffects.DARKNESS, 120, 0))
+                addEffect(MobEffectInstance(MobEffects.SLOWNESS, 100, 1))
+                addEffect(MobEffectInstance(MobEffects.POISON, 80, 0))
+            }
+        level.addFreshEntity(cloud)
+        level.playSound(null, entity.x, entity.y, entity.z, SoundEvents.PHANTOM_BITE, SoundSource.HOSTILE, 1.2f, 0.9f)
+        level.playSound(null, entity.x, entity.y, entity.z, SoundEvents.SOUL_ESCAPE, SoundSource.HOSTILE, 1.0f, 1.2f)
+    }
+
+    /**
+     * Scripted custom mob mechanics and anti-turtle wall-piercing attacks.
+     */
+    private fun tickAbilities(server: MinecraftServer) {
+        val level = arenaLevel ?: return
+        val defenders = game.defenders.mapNotNull { server.playerList.getPlayer(it) }.filter { it.isAlive }
+        if (defenders.isEmpty()) return
+
+        blazeHellfireTimer++
+        blazeHeatWaveTimer++
+        witchVolleyTimer++
+        witchDashTimer++
+        antiTurtleTimer++
+
+        // 1. Blaze Champion: Hellfire barrage every 8s (160 ticks)
+        if (blazeHellfireTimer >= 160) {
+            blazeHellfireTimer = 0
+            for ((uuid, role) in trackedMobRoles) {
+                if (role == WaveMobRole.BLAZE_CHAMPION) {
+                    val blaze = level.getEntity(uuid) as? Blaze ?: continue
+                    if (!blaze.isAlive) continue
+                    val target = defenders.minByOrNull { it.distanceToSqr(blaze) } ?: continue
+                    if (target.distanceToSqr(blaze) <= 30.0 * 30.0) {
+                        launchHellfireBarrage(level, blaze, target)
+                    }
+                }
+            }
+        }
+
+        // 2. Blaze Champion: Infernal Heat Wave (pierces mansion walls) every 12s (240 ticks)
+        if (blazeHeatWaveTimer >= 240) {
+            blazeHeatWaveTimer = 0
+            for ((uuid, role) in trackedMobRoles) {
+                if (role == WaveMobRole.BLAZE_CHAMPION) {
+                    val blaze = level.getEntity(uuid) as? Blaze ?: continue
+                    if (!blaze.isAlive) continue
+                    triggerHeatWave(level, blaze, defenders)
+                }
+            }
+        }
+
+        // 3. Witch Champion: Broom Dash every 9s (180 ticks)
+        if (witchDashTimer >= 180) {
+            witchDashTimer = 0
+            for ((uuid, role) in trackedMobRoles) {
+                if (role == WaveMobRole.WITCH_CHAMPION) {
+                    val witch = level.getEntity(uuid) as? Witch ?: continue
+                    if (!witch.isAlive) continue
+                    witch.addEffect(MobEffectInstance(MobEffects.SPEED, 80, 1))
+                    witch.addEffect(MobEffectInstance(MobEffects.LEVITATION, 20, 0))
+                    witch.addEffect(MobEffectInstance(MobEffects.SLOW_FALLING, 60, 0))
+                    level.sendParticles(ParticleTypes.WITCH, witch.x, witch.y + 1.0, witch.z, 20, 0.4, 0.4, 0.4, 0.05)
+                    level.playSound(null, witch.x, witch.y, witch.z, SoundEvents.WITCH_CELEBRATE, SoundSource.HOSTILE, 1.2f, 1.0f)
+                    level.playSound(null, witch.x, witch.y, witch.z, SoundEvents.BAT_TAKEOFF, SoundSource.HOSTILE, 1.2f, 0.8f)
+                }
+            }
+        }
+
+        // 4. Witch Champion: Potion Volley every 7s (140 ticks)
+        if (witchVolleyTimer >= 140) {
+            witchVolleyTimer = 0
+            for ((uuid, role) in trackedMobRoles) {
+                if (role == WaveMobRole.WITCH_CHAMPION) {
+                    val witch = level.getEntity(uuid) as? Witch ?: continue
+                    if (!witch.isAlive) continue
+                    val target = defenders.minByOrNull { it.distanceToSqr(witch) } ?: continue
+                    if (target.distanceToSqr(witch) <= 26.0 * 26.0) {
+                        launchWitchVolley(level, witch, target)
+                    }
+                }
+            }
+        }
+
+        // 5. Anti-Turtle Mechanic: Wall-piercing Evoker Fangs strike every 14s (280 ticks)
+        // Also tracks defenders stationary > 8 seconds in the mansion to flush them out.
+        checkStationaryDefenders(defenders)
+        if (antiTurtleTimer >= 280) {
+            antiTurtleTimer = 0
+            val hasChampion =
+                trackedMobRoles.values.any {
+                    it == WaveMobRole.BLAZE_CHAMPION || it == WaveMobRole.WITCH_CHAMPION || it == WaveMobRole.CHAMPION
+                }
+            if (hasChampion || game.currentWave >= 4) {
+                for (defender in defenders) {
+                    triggerSpectralFangs(level, defender)
+                }
+            }
+        }
+    }
+
+    private fun launchHellfireBarrage(
+        level: ServerLevel,
+        blaze: Blaze,
+        target: ServerPlayer,
+    ) {
+        val dx = target.x - blaze.x
+        val dy = (target.eyeY - 0.2) - blaze.eyeY
+        val dz = target.z - blaze.z
+
+        level.playSound(null, blaze.x, blaze.y, blaze.z, SoundEvents.BLAZE_SHOOT, SoundSource.HOSTILE, 1.4f, 0.9f)
+        for (i in -1..1) {
+            val spreadX = dx + i * 0.35
+            val spreadZ = dz - i * 0.35
+            val dir = Vec3(spreadX, dy, spreadZ).normalize()
+            val fireball = SmallFireball(level, blaze, dir)
+            fireball.setPos(blaze.x, blaze.eyeY - 0.1, blaze.z)
+            fireball.addTag(TAG_WAVE_PROJECTILE)
+            level.addFreshEntity(fireball)
+        }
+    }
+
+    private fun triggerHeatWave(
+        level: ServerLevel,
+        blaze: Blaze,
+        defenders: List<ServerPlayer>,
+    ) {
+        level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, blaze.x, blaze.eyeY, blaze.z, 40, 1.2, 0.8, 1.2, 0.08)
+        level.playSound(null, blaze.x, blaze.y, blaze.z, SoundEvents.BLAZE_BURN, SoundSource.HOSTILE, 1.5f, 0.8f)
+
+        for (defender in defenders) {
+            if (defender.distanceToSqr(blaze) <= 24.0 * 24.0) {
+                defender.remainingFireTicks = 60
+                defender.hurtServer(level, level.damageSources().magic(), 4.0f)
+                level.sendParticles(ParticleTypes.FLAME, defender.x, defender.y + 1.0, defender.z, 20, 0.4, 0.5, 0.4, 0.05)
+                level.sendParticles(ParticleTypes.LAVA, defender.x, defender.y + 1.0, defender.z, 6, 0.3, 0.3, 0.3, 0.02)
+                defender.connection.send(
+                    ClientboundSoundPacket(
+                        BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.FIRECHARGE_USE),
+                        SoundSource.PLAYERS,
+                        defender.x,
+                        defender.y,
+                        defender.z,
+                        1.0f,
+                        0.9f,
+                        level.random.nextLong(),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun launchWitchVolley(
+        level: ServerLevel,
+        witch: Witch,
+        target: ServerPlayer,
+    ) {
+        val potions = listOf(Potions.SLOWNESS, Potions.HARMING, Potions.POISON, Potions.WEAKNESS)
+        val potionHolder = potions[potionIndex % potions.size]
+        potionIndex++
+
+        val stack = PotionContents.createItemStack(Items.SPLASH_POTION, potionHolder)
+        val potion = ThrownSplashPotion(level, witch, stack)
+        val dx = target.x - witch.x
+        val dy = (target.eyeY - 0.2) - witch.eyeY
+        val dz = target.z - witch.z
+        potion.shoot(dx, dy + 0.3, dz, 0.85f, 6.0f)
+        level.addFreshEntity(potion)
+        level.playSound(null, witch.x, witch.y, witch.z, SoundEvents.WITCH_THROW, SoundSource.HOSTILE, 1.2f, 1.0f)
+    }
+
+    private fun checkStationaryDefenders(defenders: List<ServerPlayer>) {
+        val level = arenaLevel ?: return
+        for (defender in defenders) {
+            val last = defenderStationaryTicks[defender.uuid]
+            val currentPos = defender.position()
+            if (last != null && last.first.distanceToSqr(currentPos) <= 9.0) {
+                val ticks = last.second + 1
+                defenderStationaryTicks[defender.uuid] = last.first to ticks
+                // Camped in one corner for > 8 seconds (160 ticks)
+                if (ticks >= 160 && ticks % 100 == 0) {
+                    triggerSpectralFangs(level, defender)
+                    defender.sendSystemMessage(
+                        Component.translatable("exservermod.waves.anti_camp_warning").withStyle(ChatFormatting.RED),
+                        true,
+                    )
+                }
+            } else {
+                defenderStationaryTicks[defender.uuid] = currentPos to 0
+            }
+        }
+    }
+
+    private fun triggerSpectralFangs(
+        level: ServerLevel,
+        defender: ServerPlayer,
+    ) {
+        level.playSound(null, defender.x, defender.y, defender.z, SoundEvents.EVOKER_PREPARE_ATTACK, SoundSource.HOSTILE, 1.0f, 1.1f)
+        level.sendParticles(ParticleTypes.SOUL, defender.x, defender.y + 0.1, defender.z, 15, 0.4, 0.1, 0.4, 0.02)
+
+        val owner: LivingEntity = trackedMobs.firstNotNullOfOrNull { level.getEntity(it) as? LivingEntity } ?: defender
+
+        // Cluster of 3 fangs centered at the player's position, penetrating any mansion floor
+        for (i in 0..2) {
+            val angle = i * (2.0 * Math.PI / 3.0)
+            val fx = defender.x + 0.8 * cos(angle)
+            val fz = defender.z + 0.8 * sin(angle)
+            val fangs = EvokerFangs(level, fx, defender.y, fz, 0f, 20, owner)
+            level.addFreshEntity(fangs)
+        }
+    }
+
+    private fun updateBossBar(server: MinecraftServer) {
+        val onlineDefenders = game.defenders.mapNotNull { server.playerList.getPlayer(it) }.toSet()
+        for (player in onlineDefenders) {
+            if (!bossBar.players.contains(player)) {
+                bossBar.addPlayer(player)
+            }
+        }
+        for (player in bossBar.players.toList()) {
+            if (!onlineDefenders.contains(player)) {
+                bossBar.removePlayer(player)
+            }
+        }
+
+        when (game.phase) {
+            WavePhase.COUNTDOWN -> {
+                val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
+                bossBar.name =
+                    Component.translatable(
+                        "exservermod.waves.bossbar.countdown",
+                        WaveDefenseGame.TOTAL_WAVES,
+                        secondsLeft,
+                    )
+                bossBar.progress = (game.remainingTicks.toFloat() / WaveDefenseGame.COUNTDOWN_TICKS.toFloat()).coerceIn(0.0f, 1.0f)
+                bossBar.color = BossEvent.BossBarColor.YELLOW
+                bossBar.overlay = BossEvent.BossBarOverlay.PROGRESS
+            }
+            WavePhase.FIGHT -> {
+                val remaining = trackedMobs.size
+                val total = currentWaveTotalMobs.coerceAtLeast(1)
+                bossBar.name =
+                    Component.translatable(
+                        "exservermod.waves.bossbar.fight",
+                        game.currentWave,
+                        WaveDefenseGame.TOTAL_WAVES,
+                        remaining,
+                    )
+                bossBar.progress = (remaining.toFloat() / total.toFloat()).coerceIn(0.0f, 1.0f)
+                bossBar.color =
+                    if (WaveDefenseGame.isBossWave(game.currentWave)) {
+                        BossEvent.BossBarColor.PURPLE
+                    } else {
+                        BossEvent.BossBarColor.RED
+                    }
+                bossBar.overlay = BossEvent.BossBarOverlay.NOTCHED_10
+            }
+            WavePhase.INTERMISSION -> {
+                val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
+                bossBar.name =
+                    Component.translatable(
+                        "exservermod.waves.bossbar.intermission",
+                        game.currentWave,
+                        WaveDefenseGame.TOTAL_WAVES,
+                        secondsLeft,
+                    )
+                bossBar.progress = (game.remainingTicks.toFloat() / WaveDefenseGame.INTERMISSION_TICKS.toFloat()).coerceIn(0.0f, 1.0f)
+                bossBar.color = BossEvent.BossBarColor.GREEN
+                bossBar.overlay = BossEvent.BossBarOverlay.PROGRESS
+            }
+            else -> {}
+        }
+    }
+
     private fun findSpawnPos(
         level: ServerLevel,
         center: Vec3,
     ): BlockPos? {
-        repeat(12) {
+        repeat(16) {
             val angle = Random.nextDouble(0.0, 2.0 * Math.PI)
             val dist = Random.nextDouble(SPAWN_RING_MIN, SPAWN_RING_MAX)
             val x = (center.x + dist * cos(angle)).toInt()
             val z = (center.z + dist * sin(angle)).toInt()
 
             val surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)
-            // Surface spawn is fine for open arenas...
-            if (abs(surfaceY - center.y) <= 8.0) {
+            if (abs(surfaceY - center.y) <= 10.0) {
                 val pos = BlockPos(x, surfaceY, z)
                 if (isSpawnable(level, pos)) {
                     return pos
                 }
-                return@repeat
             }
 
-            // ...underground arenas spawn near the center instead
             for (dy in -3..3) {
                 val candidate = BlockPos(x, center.y.toInt() + dy, z)
                 if (isSpawnable(level, candidate)) {
@@ -321,7 +886,7 @@ class WaveManager {
 
     private fun onWaveCleared(server: MinecraftServer) {
         when (val cleared = game.onWaveCleared()) {
-            is WaveTickResult.Victory -> Unit // handled via tick() victory branch
+            is WaveTickResult.Victory -> Unit
             is WaveTickResult.PhaseChanged -> {
                 if (cleared.newPhase == WavePhase.INTERMISSION) {
                     server.playerList.broadcastSystemMessage(
@@ -345,10 +910,12 @@ class WaveManager {
         val center = arenaCenter
 
         clearMobs()
+        bossBar.removeAllPlayers()
+        bossBar.isVisible = false
 
         val defenders = game.defenders.mapNotNull { server.playerList.getPlayer(it) }
         for (defender in defenders) {
-            val anim = ClientboundSetTitlesAnimationPacket(10, 70, 20)
+            val anim = ClientboundSetTitlesAnimationPacket(10, 80, 20)
             val title =
                 ClientboundSetTitleTextPacket(
                     Component.translatable("exservermod.waves.victory").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
@@ -367,7 +934,7 @@ class WaveManager {
         server.playerList.broadcastSystemMessage(
             Component
                 .translatable("exservermod.waves.victory_chat", game.kills)
-                .withStyle(ChatFormatting.GOLD),
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
             false,
         )
 
@@ -377,13 +944,13 @@ class WaveManager {
                 listOf(
                     FireworkExplosion(
                         FireworkExplosion.Shape.LARGE_BALL,
-                        IntArrayList(intArrayOf(0xFFD700, 0x00FF88, 0x00E5FF)),
+                        IntArrayList(intArrayOf(0xFFD700, 0x00FF88, 0x00E5FF, 0xFF4500)),
                         IntArrayList(intArrayOf(0xFFFFFF)),
                         true,
                         true,
                     ),
                 )
-            fireworkStack.set(DataComponents.FIREWORKS, Fireworks(1, explosions))
+            fireworkStack.set(DataComponents.FIREWORKS, Fireworks(2, explosions))
             val firework = FireworkRocketEntity(level, center.x, center.y + 1.5, center.z, fireworkStack)
             level.addFreshEntity(firework)
 
@@ -407,7 +974,8 @@ class WaveManager {
             false,
         )
         if (isBoss) {
-            playSoundToDefenders(server, SoundEvents.WARDEN_SONIC_BOOM, 1.5f, 1.0f)
+            playSoundToDefenders(server, SoundEvents.WARDEN_SONIC_BOOM, 1.5f, 0.8f)
+            playSoundToDefenders(server, SoundEvents.WITHER_SPAWN, 1.2f, 1.0f)
         } else {
             playSoundToDefenders(server, SoundEvents.RAID_HORN, 1.5f, 1.0f)
         }
@@ -415,9 +983,7 @@ class WaveManager {
 
     private fun renderHud(server: MinecraftServer) {
         val defenders = game.defenders.mapNotNull { uuid -> server.playerList.getPlayer(uuid) }
-        if (defenders.isEmpty()) {
-            return
-        }
+        if (defenders.isEmpty()) return
 
         val message =
             when (game.phase) {
@@ -485,8 +1051,5 @@ class WaveManager {
         playSoundToDefenders(server, BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), volume, pitch)
     }
 
-    /**
-     * Debug/diagnostic helper: number of currently tracked wave mobs.
-     */
     fun trackedMobCount(): Int = trackedMobs.size
 }

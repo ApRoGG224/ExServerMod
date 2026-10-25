@@ -4,9 +4,23 @@
 The project documentation, gameplay rules, testing workflow, and architecture are fully implemented for **ExServerMod** — a Kotlin-only Fabric mod for Minecraft 26.2+ (on Java 25) implementing Hide & Seek, Mob Disguises, Visual Roulette Wheel, AFK bot control, Wave Defense, and BlueMap stealth synchronization.
 
 ## Active Status
-**Round 2 (October 2025) — bugfix pass + AFK bot + hint rework + Wave Defense.**
+**Round 3 (October 2026) — Horde Defense Rework: 11 Nightmare Waves, Raid Bossbar, Permadeath, Custom Mobs & Mansion Anti-Turtle.**
 
-### Round 2 changes
+### Round 3 changes
+- **Horde 11-Wave Nightmare Progression**: Expanded from 8 to 11 intense waves (~1.5h full gauntlet) ending in an apocalyptic multi-boss finale.
+- **Raid-Style Bossbar**: Dynamic `ServerBossEvent` at top of screen tracking current wave ("Wave X of 11") and remaining horde count, color-coded by phase (Yellow countdown, Red combat, Purple boss waves, Green intermission).
+- **Hardcore Permadeath**: Death of ANY defender immediately terminates the run. All remaining horde mobs dissolve into vapor/steam particles (`POOF`, `CLOUD`, `SOUL`) with phantom sounds.
+- **Custom Mobs & Attacks**:
+  - **Blaze Champion**: 120 HP, glowing outline, Hellfire Barrage (3 fireballs), Infernal Heat Wave (piercing walls/doors within 24 blocks).
+  - **Witch Champion**: 140 HP, Broom Dash (levitation glide), Potion Volley (slowness, harming, poison, weakness), Coven Curse.
+  - **Ghost Creeper**: Explosion radius 0 (0 block damage); on detonation spawns lingering spectral cloud (Darkness, Slowness II, Poison).
+  - **Spectral Vexes**: 24 HP, natively phase through walls/ceilings to flush out defenders hiding in mansion rooms.
+  - **Dread Champion**: 90 HP, full diamond armor and sword, ground slam shockwaves.
+- **Anti-Turtle Island Mansion Mechanics**: Stationary defenders camping inside rooms or closets for > 8s trigger wall-piercing `EvokerFangs` erupting through the floor with a 1.0s audio warning.
+- **World Integrity Zero-Grief**: `SmallFireballMixin` intercepts block collisions to prevent fire placement; creepers have explosion radius 0; zombies cannot break doors; champions have 0% drop chances.
+- **Bugfixes & Commands**: Added missing `start` command to `/waves` dispatcher, registered `WaveCommands` in mod initialization, added landmark arena binding `/waves start [landmark]`.
+
+### Round 2 changes (October 2025)
 - **Roulette/game race fixes**: canceling the wheel (ESC) now sends `RouletteCanceledPayload` and aborts the round instead of silently continuing; starting or continuing a round force-closes stale wheels (`CloseRoulettePayload`) and drops pending disguises; `RouletteManager.checkTimeouts` only applies disguises inside an active round for the current hider.
 - **AFK bot (Steve)**: excluded from all mini-games (player picking, 2-player requirement, disconnect cancellation); new `afk/` package with `/afk` command family that teleports the bot to landmarks from the shared `/location-add` list.
 - **Hint rework**: unified 45 s rotation (distance every other hint, no repeats — `HintEngine` shuffled bag with boundary guarantee); new varied hints: block under hider, open sky / underground, height difference; MOB categorical hints no longer repeat until all categories are used.
