@@ -15,7 +15,6 @@ import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.server.MinecraftServer
-import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.level.Level
 import net.minecraft.world.phys.Vec3
@@ -217,7 +216,7 @@ class AfkCommands(
             return
         }
 
-        AfkManager.teleportToPos(bot, player.level() as? ServerLevel ?: return, Vec3(pos.x + 0.5, pos.y.toDouble(), pos.z + 0.5))
+        AfkManager.teleportToPos(bot, player.level(), Vec3(pos.x + 0.5, pos.y.toDouble(), pos.z + 0.5))
         player.sendSystemMessage(
             Component.translatable("exservermod.afk.teleported_here", AfkManager.BOT_NAME).withStyle(ChatFormatting.GREEN),
         )
@@ -274,10 +273,6 @@ class AfkCommands(
 
         if (landmark != null) {
             val level = server.overworld()
-            if (level == null) {
-                source.sendSuccess({ Component.translatable("exservermod.afk.spawn_failed").withStyle(ChatFormatting.RED) }, false)
-                return
-            }
             val pos = AfkManager.findSafeSurface(level, landmark.x, landmark.z)
             if (pos == null) {
                 source.sendSuccess({ Component.translatable("exservermod.afk.unsafe_spot").withStyle(ChatFormatting.RED) }, false)

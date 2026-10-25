@@ -246,7 +246,9 @@ class GameEventHandler(
         ServerTickEvents.END_SERVER_TICK.register { server ->
             if (activeLaserTicks > 0) {
                 activeLaserTicks--
-                tickActiveLaser()
+                if (activeLaserTicks % 2 == 0) {
+                    tickActiveLaser()
+                }
             }
             RouletteManager.checkTimeouts(server, game, disguiseManager)
             val transition = game.tick()

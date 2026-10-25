@@ -239,6 +239,7 @@ class WaveManager {
 
     private fun registerServerStopping() {
         ServerLifecycleEvents.SERVER_STOPPING.register { _ ->
+            setArenaChunksForced(arenaLevel, arenaCenter, false)
             clearMobs()
             bossBar.removeAllPlayers()
             bossBar.isVisible = false
@@ -274,6 +275,7 @@ class WaveManager {
             for (player in defenders) {
                 bossBar.addPlayer(player)
             }
+            setArenaChunksForced(level, arenaCenter, true)
         }
         return started
     }
@@ -302,6 +304,7 @@ class WaveManager {
         server: MinecraftServer,
         reason: MutableComponent,
     ) {
+        setArenaChunksForced(arenaLevel, arenaCenter, false)
         clearMobs()
         bossBar.removeAllPlayers()
         bossBar.isVisible = false
@@ -321,6 +324,8 @@ class WaveManager {
         val currentWave = game.currentWave
         val kills = game.kills
         val defendersList = game.defenders.toSet() + fallenDefender.uuid
+
+        setArenaChunksForced(arenaLevel, arenaCenter, false)
 
         // Dissolve all wave mobs with vapor and ghost audio cues
         dissolveAllMobsWithSpookyEffects()
@@ -364,7 +369,7 @@ class WaveManager {
                     currentWave,
                     WaveDefenseGame.TOTAL_WAVES,
                     kills,
-                ).withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+                ).withStyle(ChatFormatting.RED),
             false,
         )
     }
@@ -958,7 +963,7 @@ class WaveManager {
 
         for (defender in defenders) {
             if (defender.distanceToSqr(blaze) <= 24.0 * 24.0) {
-                defender.remainingFireTicks = 60
+                defender.igniteForSeconds(3.0f)
                 defender.hurtServer(level, level.damageSources().magic(), 4.0f)
                 level.sendParticles(ParticleTypes.FLAME, defender.x, defender.y + 1.0, defender.z, 20, 0.4, 0.5, 0.4, 0.05)
                 level.sendParticles(ParticleTypes.LAVA, defender.x, defender.y + 1.0, defender.z, 6, 0.3, 0.3, 0.3, 0.02)
@@ -1155,6 +1160,7 @@ class WaveManager {
         val level = arenaLevel
         val center = arenaCenter
 
+        setArenaChunksForced(level, center, false)
         clearMobs()
         bossBar.removeAllPlayers()
         bossBar.isVisible = false
@@ -1185,7 +1191,12 @@ class WaveManager {
                     ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, 2),
                     ItemStack(Items.NETHERITE_INGOT, 4),
                     ItemStack(Items.NETHER_STAR, 1).apply {
-                        set(DataComponents.CUSTOM_NAME, Component.translatable("exservermod.waves.trophy_name"))
+                        set(
+                            DataComponents.CUSTOM_NAME,
+                            Component
+                                .translatable("exservermod.waves.trophy_name")
+                                .withStyle { it.withItalic(false).withColor(ChatFormatting.GOLD) },
+                        )
                     },
                 )
             for (reward in rewards) {
@@ -1325,6 +1336,24 @@ class WaveManager {
         pitch: Float,
     ) {
         playSoundToDefenders(server, BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), volume, pitch)
+    }
+
+    private fun setArenaChunksForced(
+        level: ServerLevel?,
+        center: Vec3?,
+        forced: Boolean,
+    ) {
+        if (level == null || center == null) return
+        val chunkX = center.x.toInt() shr 4
+        val chunkZ = center.z.toInt() shr 4
+        for (dx in -2..2) {
+            for (dz in -2..2) {
+                try {
+                    level.setChunkForced(chunkX + dx, chunkZ + dz, forced)
+                } catch (_: Throwable) {
+                }
+            }
+        }
     }
 
     fun trackedMobCount(): Int = trackedMobs.size

@@ -4,6 +4,7 @@ import net.minecraft.SharedConstants
 import net.minecraft.core.BlockPos
 import net.minecraft.core.GlobalPos
 import net.minecraft.core.component.DataComponentMap
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.server.Bootstrap
 import net.minecraft.world.SimpleContainer
 import net.minecraft.world.item.ItemStack
@@ -21,8 +22,10 @@ class TrackerCompassTest {
         fun setupMinecraft() {
             SharedConstants.tryDetectVersion()
             Bootstrap.bootStrap()
-            Items.COMPASS.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY)
-            Items.APPLE.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY)
+            val compassKey = BuiltInRegistries.ITEM.getResourceKey(Items.COMPASS).orElseThrow()
+            BuiltInRegistries.ITEM.getOrThrow(compassKey).bindComponents(DataComponentMap.EMPTY)
+            val appleKey = BuiltInRegistries.ITEM.getResourceKey(Items.APPLE).orElseThrow()
+            BuiltInRegistries.ITEM.getOrThrow(appleKey).bindComponents(DataComponentMap.EMPTY)
         }
     }
 
