@@ -191,5 +191,9 @@
   "exservermod.waves.locate_not_fighting": "[Волны] Колокол можно использовать только во время боя!",
   "exservermod.waves.trophy_name": "Трофей Победителя Кошмарной Орды (11 волн)",
   "exservermod.waves.reward.knockback_stick": "Отбрасывающая палка",
-  "exservermod.waves.reward.spartan_spear_drop": "[Волны] Редкая добыча! %s получает легендарное Копьё Спартанца (Spartan Spear)!"
+  "exservermod.waves.reward.spartan_spear.name": "Копьё Спартанца",
+  "exservermod.waves.reward.spartan_spear.lore1": "Выковано для 300 воинов.",
+  "exservermod.waves.reward.spartan_spear.lore2": "Нельзя починить или зачаровать.",
+  "exservermod.waves.reward.spartan_spear.lore3": "Разрушается навсегда при истощении прочности.",
+  "exservermod.waves.reward.spartan_spear_drop": "[Волны] Редкая добыча! %s получает легендарное Копьё Спартанца!"
 }

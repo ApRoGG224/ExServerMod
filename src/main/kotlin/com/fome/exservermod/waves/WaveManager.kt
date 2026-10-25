@@ -1254,7 +1254,7 @@ class WaveManager {
                         set(
                             DataComponents.CUSTOM_NAME,
                             Component
-                                .literal("Spartan Spear")
+                                .translatable("exservermod.waves.reward.spartan_spear.name")
                                 .withStyle { it.withItalic(false).withColor(ChatFormatting.GOLD) },
                         )
                         set(
@@ -1262,13 +1262,13 @@ class WaveManager {
                             ItemLore(
                                 listOf(
                                     Component
-                                        .literal("Forged for the 300.")
+                                        .translatable("exservermod.waves.reward.spartan_spear.lore1")
                                         .withStyle { it.withItalic(true).withColor(ChatFormatting.GRAY) },
                                     Component
-                                        .literal("Cannot be repaired or enchanted.")
+                                        .translatable("exservermod.waves.reward.spartan_spear.lore2")
                                         .withStyle { it.withItalic(false).withColor(ChatFormatting.RED) },
                                     Component
-                                        .literal("Breaks permanently upon depletion.")
+                                        .translatable("exservermod.waves.reward.spartan_spear.lore3")
                                         .withStyle { it.withItalic(false).withColor(ChatFormatting.DARK_RED) },
                                 ),
                             ),
