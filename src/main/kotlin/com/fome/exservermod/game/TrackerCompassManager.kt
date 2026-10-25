@@ -33,7 +33,7 @@ object TrackerCompassManager {
             DataComponents.CUSTOM_NAME,
             Component
                 .translatable("exservermod.game.tracker_compass_name")
-                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                .withStyle(ChatFormatting.GOLD),
         )
         val customData =
             CustomData.EMPTY.update { tag ->

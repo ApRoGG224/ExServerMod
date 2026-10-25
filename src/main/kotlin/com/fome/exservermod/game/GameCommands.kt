@@ -182,6 +182,17 @@ class GameCommands(
                         ),
                 )
             dispatcher.register(Commands.literal("game").redirect(gamesNode))
+            dispatcher.register(
+                Commands
+                    .literal("unstuck")
+                    .executes { ctx ->
+                        val player = ctx.source.player
+                        if (player != null) {
+                            handleUnstuck(player)
+                        }
+                        1
+                    },
+            )
         }
     }
 

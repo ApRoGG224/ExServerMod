@@ -7,6 +7,7 @@
     "CreeperAccessor",
     "EntityDimensionsMixin",
     "EntityTrackingPositionMixin",
+    "LivingEntityDropMixin",
     "ServerEntityMixin",
     "ServerPlayerDropMixin",
     "SlotContainerMixin",

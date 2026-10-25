@@ -55,7 +55,7 @@ class WaveDefenseGameTest {
         assertEquals(1, started.wave)
         assertEquals(WaveDefenseGame.TOTAL_WAVES, started.totalWaves)
         assertEquals(WavePhase.FIGHT, game.phase)
-        assertEquals(20, WaveDefenseGame.totalMobsInWave(started.groups), "Wave 1 must have 20 mobs")
+        assertEquals(15, WaveDefenseGame.totalMobsInWave(started.groups), "Wave 1 must have 15 mobs")
     }
 
     @Test
@@ -191,6 +191,13 @@ class WaveDefenseGameTest {
                 "minecraft:blaze",
                 "minecraft:wither_skeleton",
                 "minecraft:stray",
+                "minecraft:warden",
+                "minecraft:bogged",
+                "minecraft:husk",
+                "minecraft:vindicator",
+                "minecraft:evoker",
+                "minecraft:hoglin",
+                "minecraft:piglin_brute",
             )
         val forbidden = setOf("minecraft:wither", "minecraft:ghast", "minecraft:ravager", "minecraft:ender_dragon")
 

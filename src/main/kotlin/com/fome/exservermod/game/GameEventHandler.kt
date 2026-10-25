@@ -31,6 +31,7 @@ import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.server.MinecraftServer
+import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundEvents
@@ -55,9 +56,9 @@ class GameEventHandler(
         const val ACOUSTIC_TAUNT_INTERVAL_TICKS = 45 * HideAndSeekGame.TICKS_PER_SECOND // 45 seconds = 900 ticks
         const val INTELLECTUAL_HINT_INTERVAL_TICKS = 90 * HideAndSeekGame.TICKS_PER_SECOND // 90 seconds = 1800 ticks
         const val TRACKER_COMPASS_DURATION_TICKS = 20 * HideAndSeekGame.TICKS_PER_SECOND // 20 seconds = 400 ticks
-        const val LATE_GAME_HINT_TIME_TICKS = 5 * 60 * HideAndSeekGame.TICKS_PER_SECOND // 5 minutes = 6000 ticks
+        const val LATE_GAME_HINT_TIME_TICKS = 10 * 60 * HideAndSeekGame.TICKS_PER_SECOND // 10 minutes = 12000 ticks
         const val ECHO_PULSE_INTERVAL_TICKS = 30 * HideAndSeekGame.TICKS_PER_SECOND // 30 seconds = 600 ticks
-        const val MOVEMENT_ALERT_DISTANCE = 25.0
+        const val MOVEMENT_ALERT_DISTANCE = 20.0
         const val SECTOR_OFFSET_MIN = 15.0
         const val SECTOR_OFFSET_MAX = 30.0
         const val ECHO_STOP_DISTANCE = 3.0
@@ -67,7 +68,15 @@ class GameEventHandler(
 
     private var hiderInitialX: Double? = null
     private var hiderInitialZ: Double? = null
-    private var hasAlertedMovedTwentyFiveBlocks: Boolean = false
+    private var lastAlertedX: Double? = null
+    private var lastAlertedZ: Double? = null
+    private var activeLaserTicks: Int = 0
+    private var laserStart: Vec3? = null
+    private var laserEnd: Vec3? = null
+    private var laserLevel: ServerLevel? = null
+    private var laserHiderPos: Vec3? = null
+    private var laserIsUnderground: Boolean = false
+    private var laserSurfaceY: Int = 0
     private var lastPhase: GamePhase = GamePhase.IDLE
     private var trackerCompassRemovalTick: Int? = null
     private val hintEngine = HintEngine()
@@ -115,7 +124,9 @@ class GameEventHandler(
                     if (caught) {
                         hiderInitialX = null
                         hiderInitialZ = null
-                        hasAlertedMovedTwentyFiveBlocks = false
+                        lastAlertedX = null
+                        lastAlertedZ = null
+                        activeLaserTicks = 0
                         level.server?.let { clearTrackerCompasses(it) }
 
                         val seekerName = player.name.string
@@ -129,7 +140,7 @@ class GameEventHandler(
                         val animPacket = ClientboundSetTitlesAnimationPacket(10, 100, 20)
                         val titlePacket =
                             ClientboundSetTitleTextPacket(
-                                Component.translatable("exservermod.game.title.caught").withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+                                Component.translatable("exservermod.game.title.caught").withStyle(ChatFormatting.RED),
                             )
                         val subtitlePacket =
                             ClientboundSetSubtitleTextPacket(
@@ -233,6 +244,10 @@ class GameEventHandler(
 
     private fun registerServerTick() {
         ServerTickEvents.END_SERVER_TICK.register { server ->
+            if (activeLaserTicks > 0) {
+                activeLaserTicks--
+                tickActiveLaser()
+            }
             RouletteManager.checkTimeouts(server, game, disguiseManager)
             val transition = game.tick()
             if (transition is TickResult.PhaseChanged) {
@@ -299,20 +314,42 @@ class GameEventHandler(
                     )
                 }
 
-                // 25-block movement alert from starting hiding spot
-                if (hider != null && !hasAlertedMovedTwentyFiveBlocks) {
-                    val startX = hiderInitialX
-                    val startZ = hiderInitialZ
-                    if (startX != null && startZ != null) {
-                        val distance = hypot(hider.x - startX, hider.z - startZ)
-                        if (distance > MOVEMENT_ALERT_DISTANCE) {
-                            hasAlertedMovedTwentyFiveBlocks = true
-                            server.playerList.broadcastSystemMessage(
-                                Component
-                                    .translatable("exservermod.hideandseek.alert.moved_twenty_five_blocks")
-                                    .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
-                                false,
-                            )
+                // Periodic movement alert: triggers every 20 meters the hider travels
+                if (hider != null) {
+                    val lx = lastAlertedX
+                    val lz = lastAlertedZ
+                    if (lx == null || lz == null) {
+                        lastAlertedX = hider.x
+                        lastAlertedZ = hider.z
+                    } else {
+                        val distance = hypot(hider.x - lx, hider.z - lz)
+                        if (distance >= MOVEMENT_ALERT_DISTANCE) {
+                            lastAlertedX = hider.x
+                            lastAlertedZ = hider.z
+
+                            val dim =
+                                hider
+                                    .level()
+                                    .dimension()
+                                    .identifier()
+                                    .toString()
+                            val closest = landmarks.findClosest(hider.x, hider.z, dim)
+                            val alertMsg =
+                                if (closest != null) {
+                                    val landmarkDist = hypot(hider.x - closest.x, hider.z - closest.z).toInt()
+                                    Component.translatable(
+                                        "exservermod.hideandseek.alert.moved_landmark",
+                                        closest.name,
+                                        landmarkDist,
+                                    )
+                                } else {
+                                    Component.translatable(
+                                        "exservermod.hideandseek.alert.moved_coords",
+                                        hider.blockX,
+                                        hider.blockZ,
+                                    )
+                                }
+                            server.playerList.broadcastSystemMessage(alertMsg.withStyle(ChatFormatting.GOLD), false)
 
                             val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
                             if (seeker != null) {
@@ -333,34 +370,6 @@ class GameEventHandler(
                                     )
                                 }
                             }
-
-                            val dim =
-                                hider
-                                    .level()
-                                    .dimension()
-                                    .identifier()
-                                    .toString()
-                            val closest = landmarks.findClosest(hider.x, hider.z, dim)
-                            if (closest != null) {
-                                val landmarkDist = hypot(hider.x - closest.x, hider.z - closest.z).toInt()
-                                server.playerList.broadcastSystemMessage(
-                                    Component
-                                        .translatable(
-                                            "exservermod.hideandseek.hint.closest_landmark",
-                                            closest.name,
-                                            landmarkDist,
-                                        ).withStyle(ChatFormatting.AQUA),
-                                    false,
-                                )
-                            } else {
-                                server.playerList.broadcastSystemMessage(
-                                    Component
-                                        .translatable("exservermod.hideandseek.hint.no_landmarks")
-                                        .withStyle(ChatFormatting.GRAY),
-                                    false,
-                                )
-                            }
-
                             playSoundToParticipants(server, SoundEvents.BELL_BLOCK, 1.2f, 1.0f)
                         }
                     }
@@ -533,7 +542,7 @@ class GameEventHandler(
             if (dist < CLOSE_DISTANCE_BLOCKS) {
                 Component
                     .translatable("exservermod.hideandseek.hint.distance_close")
-                    .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
+                    .withStyle(ChatFormatting.GOLD)
             } else {
                 val tier = HideAndSeekGame.calculateDistanceTier(dist)
                 Component
@@ -649,6 +658,17 @@ class GameEventHandler(
         val steps = (length / ECHO_RAY_STEP).toInt().coerceIn(4, 48)
         val level = seeker.level()
 
+        val surfaceY = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, hider.blockX, hider.blockZ)
+        val isUnderground = (surfaceY - hider.blockY) >= 3
+
+        activeLaserTicks = 100 // Persist for 5 seconds (100 ticks)
+        laserStart = start
+        laserEnd = end
+        laserLevel = level
+        laserHiderPos = Vec3(hider.x, hider.y, hider.z)
+        laserIsUnderground = isUnderground
+        laserSurfaceY = surfaceY
+
         var i = 0
         while (i <= steps) {
             val t = i.toDouble() / steps
@@ -661,16 +681,61 @@ class GameEventHandler(
 
         // Text aid for the seeker: rough distance plus compass direction
         val directionKey = compassDirectionKey(unit.x, unit.z)
-        seeker.sendSystemMessage(
-            Component
-                .translatable(
-                    "exservermod.game.echo_pulse_launched",
-                    dist.toInt(),
-                    Component.translatable(directionKey),
-                ).withStyle(ChatFormatting.DARK_AQUA),
-            false,
-        )
+        if (isUnderground) {
+            seeker.sendSystemMessage(
+                Component
+                    .translatable(
+                        "exservermod.game.echo_pulse_underground",
+                        (surfaceY - hider.blockY).coerceAtLeast(1),
+                        dist.toInt(),
+                        Component.translatable(directionKey),
+                    ).withStyle(ChatFormatting.DARK_AQUA),
+                false,
+            )
+        } else {
+            seeker.sendSystemMessage(
+                Component
+                    .translatable(
+                        "exservermod.game.echo_pulse_launched",
+                        dist.toInt(),
+                        Component.translatable(directionKey),
+                    ).withStyle(ChatFormatting.DARK_AQUA),
+                false,
+            )
+        }
         playSoundToParticipants(server, SoundEvents.WARDEN_SONIC_BOOM, 0.8f, 1.6f)
+    }
+
+    private fun tickActiveLaser() {
+        val s = laserStart ?: return
+        val e = laserEnd ?: return
+        val lvl = laserLevel ?: return
+
+        val delta = e.subtract(s)
+        val len = delta.length()
+        if (len > 0.0) {
+            val u = delta.normalize()
+            val steps = (len / ECHO_RAY_STEP).toInt().coerceIn(4, 48)
+            for (i in 0..steps) {
+                val t = i.toDouble() / steps
+                val p = s.add(u.scale(len * t))
+                lvl.sendParticles(ParticleTypes.GLOW, p.x, p.y, p.z, 1, 0.04, 0.04, 0.04, 0.0)
+            }
+            lvl.sendParticles(ParticleTypes.END_ROD, e.x, e.y, e.z, 2, 0.1, 0.1, 0.1, 0.01)
+        }
+
+        if (laserIsUnderground) {
+            val hp = laserHiderPos
+            val sy = laserSurfaceY
+            if (hp != null && sy > hp.y) {
+                val ySteps = ((sy + 2 - hp.y) / 1.0).toInt().coerceIn(3, 30)
+                for (i in 0..ySteps) {
+                    val y = hp.y + i * 1.0
+                    lvl.sendParticles(ParticleTypes.PORTAL, hp.x, y, hp.z, 2, 0.1, 0.1, 0.1, 0.02)
+                }
+                lvl.sendParticles(ParticleTypes.GLOW, hp.x, sy + 1.0, hp.z, 3, 0.2, 0.2, 0.2, 0.01)
+            }
+        }
     }
 
     /**
@@ -859,8 +924,10 @@ class GameEventHandler(
                 if (hider != null) {
                     hiderInitialX = hider.x
                     hiderInitialZ = hider.z
-                    hasAlertedMovedTwentyFiveBlocks = false
+                    lastAlertedX = hider.x
+                    lastAlertedZ = hider.z
                 }
+                activeLaserTicks = 0
 
                 if (seeker != null && hider != null) {
                     grantSectorCompass(server, seeker, hider)
@@ -870,7 +937,9 @@ class GameEventHandler(
                 BlueMapCompat.setPlayersVisibility(participants, false)
                 hiderInitialX = null
                 hiderInitialZ = null
-                hasAlertedMovedTwentyFiveBlocks = false
+                lastAlertedX = null
+                lastAlertedZ = null
+                activeLaserTicks = 0
                 disguiseManager.resetUnstuckCounters()
                 clearTrackerCompasses(server)
             }
@@ -878,7 +947,9 @@ class GameEventHandler(
                 BlueMapCompat.setPlayersVisibility(participants, true)
                 hiderInitialX = null
                 hiderInitialZ = null
-                hasAlertedMovedTwentyFiveBlocks = false
+                lastAlertedX = null
+                lastAlertedZ = null
+                activeLaserTicks = 0
                 clearTrackerCompasses(server)
             }
             GamePhase.IDLE -> {
@@ -886,13 +957,17 @@ class GameEventHandler(
                 disguiseManager.clearAll(server)
                 hiderInitialX = null
                 hiderInitialZ = null
-                hasAlertedMovedTwentyFiveBlocks = false
+                lastAlertedX = null
+                lastAlertedZ = null
+                activeLaserTicks = 0
                 clearTrackerCompasses(server)
             }
             GamePhase.VOTING -> {
                 hiderInitialX = null
                 hiderInitialZ = null
-                hasAlertedMovedTwentyFiveBlocks = false
+                lastAlertedX = null
+                lastAlertedZ = null
+                activeLaserTicks = 0
                 clearTrackerCompasses(server)
             }
         }

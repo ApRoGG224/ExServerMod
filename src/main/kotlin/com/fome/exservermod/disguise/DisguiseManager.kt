@@ -276,6 +276,28 @@ class DisguiseManager {
             }
             if (bestPos != null) return bestPos
         }
+
+        // Upward ejection fallback if suffocating or trapped inside solid blocks
+        for (up in 1..25) {
+            val candidateBlock = basePos.above(up)
+            val testX = candidateBlock.x + 0.5
+            val testY = candidateBlock.y.toDouble()
+            val testZ = candidateBlock.z + 0.5
+            val candidateBox = dims.makeBoundingBox(testX, testY, testZ)
+            if (level.noCollision(player, candidateBox)) {
+                val feetFluid = level.getFluidState(candidateBlock)
+                if (!feetFluid.isSourceOfType(Fluids.LAVA)) {
+                    return Vec3(testX, testY, testZ)
+                }
+            }
+        }
+
+        // Surface fallback: always eject to surface above player
+        val surfaceY = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, basePos.x, basePos.z)
+        if (surfaceY > level.minY) {
+            return Vec3(basePos.x + 0.5, surfaceY.toDouble(), basePos.z + 0.5)
+        }
+
         return bestPos
     }
 
@@ -287,15 +309,6 @@ class DisguiseManager {
         val now = System.currentTimeMillis()
 
         if (!isAutomatic) {
-            if (isSeekingPhase && !isPlayerStuck(player)) {
-                player.sendSystemMessage(
-                    Component
-                        .translatable("exservermod.disguise.not_stuck")
-                        .withStyle(ChatFormatting.RED),
-                )
-                return false
-            }
-
             val lastUsed = unstuckCooldowns[player.uuid] ?: 0L
             val elapsed = now - lastUsed
             if (elapsed < UNSTUCK_COOLDOWN_MS) {

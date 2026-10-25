@@ -77,6 +77,36 @@ class WaveCommands(
                                 }
                                 1
                             },
+                    ).then(
+                        Commands
+                            .literal("locate")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleLocate(player)
+                                }
+                                1
+                            },
+                    ).then(
+                        Commands
+                            .literal("glow")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleLocate(player)
+                                }
+                                1
+                            },
+                    ).then(
+                        Commands
+                            .literal("bell")
+                            .executes { ctx ->
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    handleLocate(player)
+                                }
+                                1
+                            },
                     ),
             )
         }
@@ -186,7 +216,7 @@ class WaveCommands(
                         "exservermod.waves.started_arena",
                         displayArenaName,
                         WaveDefenseGame.TOTAL_WAVES,
-                    ).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                    ).withStyle(ChatFormatting.GOLD),
                 false,
             )
         } else {
@@ -195,7 +225,7 @@ class WaveCommands(
                     .translatable(
                         "exservermod.waves.started",
                         WaveDefenseGame.TOTAL_WAVES,
-                    ).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                    ).withStyle(ChatFormatting.GOLD),
                 false,
             )
         }
@@ -204,6 +234,17 @@ class WaveCommands(
             Component.translatable("exservermod.waves.started_hint").withStyle(ChatFormatting.YELLOW),
             false,
         )
+    }
+
+    private fun handleLocate(player: ServerPlayer) {
+        val game = ExServerMod.waveManager
+        if (!game.isRunning()) {
+            player.sendSystemMessage(
+                Component.translatable("exservermod.waves.error.not_running").withStyle(ChatFormatting.RED),
+            )
+            return
+        }
+        game.triggerLocateBell(player)
     }
 
     private fun handleStop(player: ServerPlayer) {

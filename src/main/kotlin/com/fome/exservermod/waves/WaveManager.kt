@@ -12,6 +12,7 @@ import net.minecraft.core.Holder
 import net.minecraft.core.component.DataComponents
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.core.registries.Registries
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.MutableComponent
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket
@@ -19,6 +20,7 @@ import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.resources.Identifier
+import net.minecraft.resources.ResourceKey
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerBossEvent
 import net.minecraft.server.level.ServerLevel
@@ -41,6 +43,13 @@ import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.monster.Blaze
 import net.minecraft.world.entity.monster.Creeper
 import net.minecraft.world.entity.monster.Witch
+import net.minecraft.world.entity.monster.hoglin.Hoglin
+import net.minecraft.world.entity.monster.illager.Vindicator
+import net.minecraft.world.entity.monster.piglin.AbstractPiglin
+import net.minecraft.world.entity.monster.piglin.PiglinBrute
+import net.minecraft.world.entity.monster.skeleton.AbstractSkeleton
+import net.minecraft.world.entity.monster.skeleton.WitherSkeleton
+import net.minecraft.world.entity.monster.warden.Warden
 import net.minecraft.world.entity.monster.zombie.Zombie
 import net.minecraft.world.entity.projectile.EvokerFangs
 import net.minecraft.world.entity.projectile.FireworkRocketEntity
@@ -53,11 +62,12 @@ import net.minecraft.world.item.alchemy.PotionContents
 import net.minecraft.world.item.alchemy.Potions
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
+import net.minecraft.world.item.enchantment.Enchantment
+import net.minecraft.world.item.enchantment.Enchantments
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -74,6 +84,7 @@ class WaveManager {
         const val SPAWN_RING_MAX = 22.0
         const val VICTORY_XP = 750
         const val CLEANUP_CHECK_INTERVAL_TICKS = 20
+        const val LOCATE_COOLDOWN_MS = 60_000L
         const val TAG_WAVE_MOB = "ex_wave_mob"
         const val TAG_WAVE_PROJECTILE = "ex_wave_projectile"
 
@@ -137,6 +148,8 @@ class WaveManager {
     // Defender position tracker to detect camping inside mansion rooms (stationary > 8s)
     private val defenderStationaryTicks: MutableMap<UUID, Pair<Vec3, Int>> = ConcurrentHashMap()
 
+    private var lastLocateTimestamp: Long = 0L
+
     fun register() {
         registerTick()
         registerEntityDeath()
@@ -175,6 +188,19 @@ class WaveManager {
                             .toSet()
                     if (game.areAllDefendersOffline(onlineUuids)) {
                         abort(server, Component.translatable("exservermod.waves.abort_no_defenders"))
+                    }
+                }
+            }
+
+            if (game.isActive()) {
+                for (uuid in game.defenders) {
+                    val defender = server.playerList.getPlayer(uuid) ?: continue
+                    if (defender.isFallFlying) {
+                        defender.stopFallFlying()
+                        defender.sendSystemMessage(
+                            Component.translatable("exservermod.waves.elytra_forbidden").withStyle(ChatFormatting.RED),
+                            true,
+                        )
                     }
                 }
             }
@@ -238,6 +264,7 @@ class WaveManager {
         witchDashTimer = 0
         antiTurtleTimer = 0
         potionIndex = 0
+        lastLocateTimestamp = 0L
         defenderStationaryTicks.clear()
 
         val started = game.start(defenders.map { it.uuid })
@@ -309,7 +336,7 @@ class WaveManager {
                 ClientboundSetTitleTextPacket(
                     Component
                         .translatable("exservermod.waves.defeat_title")
-                        .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD),
+                        .withStyle(ChatFormatting.DARK_RED),
                 )
             val subtitle =
                 ClientboundSetSubtitleTextPacket(
@@ -451,13 +478,28 @@ class WaveManager {
             mob.setDropChance(slot, 0.0f)
         }
 
+        // Instant aggro and pursuit: charge the nearest defender immediately
+        val nearestDefender =
+            game.defenders
+                .mapNotNull { level.server.playerList.getPlayer(it) }
+                .filter { it.isAlive && it.level().dimension() == level.dimension() }
+                .minByOrNull { it.distanceToSqr(mob.x, mob.y, mob.z) }
+
+        if (nearestDefender != null) {
+            mob.target = nearestDefender
+            if (mob is Warden) {
+                mob.increaseAngerAt(nearestDefender, 150, true)
+            }
+        }
+        mob.getAttribute(Attributes.FOLLOW_RANGE)?.let { it.baseValue = 128.0 }
+
         when (role) {
             WaveMobRole.BLAZE_CHAMPION -> configureBlazeChampion(mob)
             WaveMobRole.WITCH_CHAMPION -> configureWitchChampion(mob)
             WaveMobRole.GHOST_CREEPER -> configureGhostCreeper(mob)
             WaveMobRole.CHAMPION -> configureDreadChampion(mob)
             WaveMobRole.SPECTRAL_VEX -> configureSpectralVex(mob)
-            WaveMobRole.STANDARD -> configureStandardMob(mob)
+            WaveMobRole.STANDARD -> configureMobEquipment(level, mob, game.currentWave)
         }
 
         level.addFreshEntity(mob)
@@ -468,9 +510,9 @@ class WaveManager {
         mob.setCustomName(
             Component
                 .translatable("exservermod.waves.mob.blaze_champion")
-                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                .withStyle(ChatFormatting.GOLD),
         )
-        mob.setCustomNameVisible(true)
+        mob.isCustomNameVisible = false
         mob.addTag("ex_blaze_champion")
 
         mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 120.0 }
@@ -484,9 +526,9 @@ class WaveManager {
         mob.setCustomName(
             Component
                 .translatable("exservermod.waves.mob.witch_champion")
-                .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.BOLD),
+                .withStyle(ChatFormatting.DARK_PURPLE),
         )
-        mob.setCustomNameVisible(true)
+        mob.isCustomNameVisible = false
         mob.addTag("ex_witch_champion")
 
         mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 140.0 }
@@ -502,9 +544,9 @@ class WaveManager {
         mob.setCustomName(
             Component
                 .translatable("exservermod.waves.mob.ghost_creeper")
-                .withStyle(ChatFormatting.DARK_AQUA, ChatFormatting.BOLD),
+                .withStyle(ChatFormatting.DARK_AQUA),
         )
-        mob.setCustomNameVisible(true)
+        mob.isCustomNameVisible = false
         mob.addTag("ex_ghost_creeper")
         mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.28 }
     }
@@ -513,9 +555,9 @@ class WaveManager {
         mob.setCustomName(
             Component
                 .translatable("exservermod.waves.mob.dread_champion")
-                .withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+                .withStyle(ChatFormatting.RED),
         )
-        mob.setCustomNameVisible(true)
+        mob.isCustomNameVisible = false
         mob.addTag("ex_dread_champion")
 
         mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 90.0 }
@@ -524,11 +566,11 @@ class WaveManager {
 
         val gear =
             mapOf(
-                EquipmentSlot.HEAD to Items.DIAMOND_HELMET,
-                EquipmentSlot.CHEST to Items.DIAMOND_CHESTPLATE,
-                EquipmentSlot.LEGS to Items.DIAMOND_LEGGINGS,
-                EquipmentSlot.FEET to Items.DIAMOND_BOOTS,
-                EquipmentSlot.MAINHAND to Items.DIAMOND_SWORD,
+                EquipmentSlot.HEAD to Items.NETHERITE_HELMET,
+                EquipmentSlot.CHEST to Items.NETHERITE_CHESTPLATE,
+                EquipmentSlot.LEGS to Items.NETHERITE_LEGGINGS,
+                EquipmentSlot.FEET to Items.NETHERITE_BOOTS,
+                EquipmentSlot.MAINHAND to Items.NETHERITE_SWORD,
             )
         for ((slot, item) in gear) {
             mob.setItemSlot(slot, ItemStack(item))
@@ -542,19 +584,220 @@ class WaveManager {
                 .translatable("exservermod.waves.mob.spectral_vex")
                 .withStyle(ChatFormatting.AQUA),
         )
-        mob.setCustomNameVisible(true)
+        mob.isCustomNameVisible = false
         mob.addTag("ex_spectral_vex")
         mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 24.0 }
         mob.health = 24.0f
     }
 
-    private fun configureStandardMob(mob: Mob) {
-        // Elite gear on higher waves
-        if (game.currentWave >= 6 && mob is Zombie && Random.nextFloat() < 0.4f) {
-            mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.IRON_CHESTPLATE))
-            mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.IRON_SWORD))
-            mob.setDropChance(EquipmentSlot.CHEST, 0.0f)
+    private fun enchantItem(
+        level: ServerLevel,
+        stack: ItemStack,
+        key: ResourceKey<Enchantment>,
+        enchantLevel: Int,
+    ) {
+        try {
+            val holder = level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(key)
+            stack.enchant(holder, enchantLevel)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun configureMobEquipment(
+        level: ServerLevel,
+        mob: Mob,
+        wave: Int,
+    ) {
+        mob.isCustomNameVisible = false
+
+        // Undead sun protection: infinite fire resistance
+        val isUndead = mob is Zombie || mob is AbstractSkeleton
+        if (isUndead) {
+            mob.addEffect(MobEffectInstance(MobEffects.FIRE_RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+        }
+
+        // Prevent Nether mobs from zombifying in Overworld
+        if (mob is AbstractPiglin) {
+            mob.setImmuneToZombification(true)
+        }
+        if (mob is Hoglin) {
+            mob.setImmuneToZombification(true)
+            mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 120.0 }
+            mob.health = 120.0f
+            mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.32 }
+            return
+        }
+
+        // Warden anger & durability
+        if (mob is Warden) {
+            mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 500.0 }
+            mob.health = 500.0f
+            return
+        }
+
+        // Skeletons, Bogged, Strays: always give bows, powerful enchantments on later waves
+        if (mob is AbstractSkeleton) {
+            val bow = ItemStack(Items.BOW)
+            when {
+                wave >= 8 -> {
+                    enchantItem(level, bow, Enchantments.POWER, 5)
+                    enchantItem(level, bow, Enchantments.PUNCH, 5)
+                    enchantItem(level, bow, Enchantments.FLAME, 1)
+                }
+                wave >= 4 -> {
+                    enchantItem(level, bow, Enchantments.POWER, 4)
+                    enchantItem(level, bow, Enchantments.PUNCH, 2)
+                }
+                wave >= 2 -> {
+                    enchantItem(level, bow, Enchantments.POWER, 2)
+                }
+            }
+            mob.setItemSlot(EquipmentSlot.MAINHAND, bow)
             mob.setDropChance(EquipmentSlot.MAINHAND, 0.0f)
+
+            // Helmets to prevent burning in daylight
+            val helmetItem =
+                when {
+                    wave >= 8 -> Items.NETHERITE_HELMET
+                    wave >= 4 -> Items.DIAMOND_HELMET
+                    else -> Items.IRON_HELMET
+                }
+            mob.setItemSlot(EquipmentSlot.HEAD, ItemStack(helmetItem))
+            mob.setDropChance(EquipmentSlot.HEAD, 0.0f)
+
+            if (wave >= 8) {
+                mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.NETHERITE_CHESTPLATE))
+                mob.setItemSlot(EquipmentSlot.LEGS, ItemStack(Items.NETHERITE_LEGGINGS))
+                mob.setItemSlot(EquipmentSlot.FEET, ItemStack(Items.NETHERITE_BOOTS))
+            } else if (wave >= 5) {
+                mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.DIAMOND_CHESTPLATE))
+            }
+            for (slot in EquipmentSlot.entries) {
+                mob.setDropChance(slot, 0.0f)
+            }
+            return
+        }
+
+        // Zombies, Husks, Drowned, Wither Skeletons
+        if (mob is Zombie || mob is WitherSkeleton) {
+            when {
+                wave >= 8 -> {
+                    // Full Netherite + Strength II + Regen II + Speed I
+                    val helmet = ItemStack(Items.NETHERITE_HELMET)
+                    val chest = ItemStack(Items.NETHERITE_CHESTPLATE)
+                    val legs = ItemStack(Items.NETHERITE_LEGGINGS)
+                    val boots = ItemStack(Items.NETHERITE_BOOTS)
+                    val weapon = ItemStack(Items.NETHERITE_SWORD)
+
+                    enchantItem(level, chest, Enchantments.PROTECTION, 4)
+                    enchantItem(level, weapon, Enchantments.SHARPNESS, 5)
+
+                    mob.setItemSlot(EquipmentSlot.HEAD, helmet)
+                    mob.setItemSlot(EquipmentSlot.CHEST, chest)
+                    mob.setItemSlot(EquipmentSlot.LEGS, legs)
+                    mob.setItemSlot(EquipmentSlot.FEET, boots)
+                    mob.setItemSlot(EquipmentSlot.MAINHAND, weapon)
+
+                    mob.addEffect(MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 1, false, false))
+                    mob.addEffect(MobEffectInstance(MobEffects.REGENERATION, MobEffectInstance.INFINITE_DURATION, 1, false, false))
+                    mob.addEffect(MobEffectInstance(MobEffects.SPEED, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+                }
+                wave >= 5 -> {
+                    // Full Diamond
+                    mob.setItemSlot(EquipmentSlot.HEAD, ItemStack(Items.DIAMOND_HELMET))
+                    mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.DIAMOND_CHESTPLATE))
+                    mob.setItemSlot(EquipmentSlot.LEGS, ItemStack(Items.DIAMOND_LEGGINGS))
+                    mob.setItemSlot(EquipmentSlot.FEET, ItemStack(Items.DIAMOND_BOOTS))
+                    mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.DIAMOND_SWORD))
+                    mob.addEffect(MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+                }
+                wave >= 2 -> {
+                    // Full Iron armor already from wave 2!
+                    mob.setItemSlot(EquipmentSlot.HEAD, ItemStack(Items.IRON_HELMET))
+                    mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.IRON_CHESTPLATE))
+                    mob.setItemSlot(EquipmentSlot.LEGS, ItemStack(Items.IRON_LEGGINGS))
+                    mob.setItemSlot(EquipmentSlot.FEET, ItemStack(Items.IRON_BOOTS))
+                    mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.IRON_SWORD))
+                }
+                else -> {
+                    // Wave 1: Chainmail with iron helmet
+                    mob.setItemSlot(EquipmentSlot.HEAD, ItemStack(Items.IRON_HELMET))
+                    mob.setItemSlot(EquipmentSlot.CHEST, ItemStack(Items.CHAINMAIL_CHESTPLATE))
+                    mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.IRON_SWORD))
+                }
+            }
+
+            for (slot in EquipmentSlot.entries) {
+                mob.setDropChance(slot, 0.0f)
+            }
+            return
+        }
+
+        // Vindicators
+        if (mob is Vindicator) {
+            val axeItem =
+                when {
+                    wave >= 8 -> Items.NETHERITE_AXE
+                    wave >= 4 -> Items.DIAMOND_AXE
+                    else -> Items.IRON_AXE
+                }
+            val axe = ItemStack(axeItem)
+            if (wave >= 8) {
+                enchantItem(level, axe, Enchantments.SHARPNESS, 4)
+            }
+            mob.setItemSlot(EquipmentSlot.MAINHAND, axe)
+            mob.setDropChance(EquipmentSlot.MAINHAND, 0.0f)
+            mob.addEffect(MobEffectInstance(MobEffects.SPEED, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+            return
+        }
+
+        // Piglin Brutes
+        if (mob is PiglinBrute) {
+            val axe = ItemStack(if (wave >= 8) Items.NETHERITE_AXE else Items.DIAMOND_AXE)
+            mob.setItemSlot(EquipmentSlot.MAINHAND, axe)
+            mob.setDropChance(EquipmentSlot.MAINHAND, 0.0f)
+            mob.addEffect(MobEffectInstance(MobEffects.SPEED, MobEffectInstance.INFINITE_DURATION, 0, false, false))
+            return
+        }
+    }
+
+    fun triggerLocateBell(player: ServerPlayer) {
+        val server = player.level().server
+        if (!game.isFighting()) {
+            player.sendSystemMessage(
+                Component.translatable("exservermod.waves.locate_not_fighting").withStyle(ChatFormatting.RED),
+            )
+            return
+        }
+        val now = System.currentTimeMillis()
+        val elapsed = now - lastLocateTimestamp
+        if (elapsed < LOCATE_COOLDOWN_MS) {
+            val remainingSec = ((LOCATE_COOLDOWN_MS - elapsed) / 1000).coerceAtLeast(1)
+            player.sendSystemMessage(
+                Component.translatable("exservermod.waves.locate_cooldown", remainingSec).withStyle(ChatFormatting.RED),
+            )
+            return
+        }
+        lastLocateTimestamp = now
+
+        var count = 0
+        val level = arenaLevel ?: player.level()
+        for (uuid in trackedMobs) {
+            val mob = level.getEntity(uuid) as? Mob ?: continue
+            if (mob.isAlive) {
+                mob.addEffect(MobEffectInstance(MobEffects.GLOWING, 300, 0, false, false))
+                count++
+            }
+        }
+
+        playSoundToDefenders(server, SoundEvents.BELL_RESONATE, 2.0f, 1.0f)
+        playSoundToDefenders(server, SoundEvents.RAID_HORN, 1.5f, 1.2f)
+
+        for (uuid in game.defenders) {
+            val defender = server.playerList.getPlayer(uuid) ?: continue
+            defender.sendSystemMessage(
+                Component.translatable("exservermod.waves.locate_success", count).withStyle(ChatFormatting.GOLD),
+            )
         }
     }
 
@@ -588,6 +831,25 @@ class WaveManager {
         witchVolleyTimer++
         witchDashTimer++
         antiTurtleTimer++
+
+        // 0. Continuous horde pursuit: re-target nearest alive defender every second
+        if (server.tickCount % 20 == 0) {
+            for (uuid in trackedMobs) {
+                val mob = level.getEntity(uuid) as? Mob ?: continue
+                if (mob.isAlive && (mob.target == null || !mob.target!!.isAlive)) {
+                    val nearest =
+                        defenders
+                            .filter { it.level().dimension() == mob.level().dimension() }
+                            .minByOrNull { it.distanceToSqr(mob.x, mob.y, mob.z) }
+                    if (nearest != null) {
+                        mob.target = nearest
+                        if (mob is Warden) {
+                            mob.increaseAngerAt(nearest, 150, true)
+                        }
+                    }
+                }
+            }
+        }
 
         // 1. Blaze Champion: Hellfire barrage every 8s (160 ticks)
         if (blazeHellfireTimer >= 160) {
@@ -842,25 +1104,17 @@ class WaveManager {
         level: ServerLevel,
         center: Vec3,
     ): BlockPos? {
-        repeat(16) {
+        repeat(32) {
             val angle = Random.nextDouble(0.0, 2.0 * Math.PI)
             val dist = Random.nextDouble(SPAWN_RING_MIN, SPAWN_RING_MAX)
             val x = (center.x + dist * cos(angle)).toInt()
             val z = (center.z + dist * sin(angle)).toInt()
 
             val surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)
-            if (abs(surfaceY - center.y) <= 10.0) {
-                val pos = BlockPos(x, surfaceY, z)
-                if (isSpawnable(level, pos)) {
-                    return pos
-                }
-            }
-
-            for (dy in -3..3) {
-                val candidate = BlockPos(x, center.y.toInt() + dy, z)
-                if (isSpawnable(level, candidate)) {
-                    return candidate
-                }
+            val pos = BlockPos(x, surfaceY, z)
+            // Absolute requirement: mob must see the open sky (never in caves, holes or tunnels!)
+            if (level.canSeeSky(pos) && isSpawnable(level, pos)) {
+                return pos
             }
         }
         return null
@@ -910,7 +1164,7 @@ class WaveManager {
             val anim = ClientboundSetTitlesAnimationPacket(10, 80, 20)
             val title =
                 ClientboundSetTitleTextPacket(
-                    Component.translatable("exservermod.waves.victory").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                    Component.translatable("exservermod.waves.victory").withStyle(ChatFormatting.GOLD),
                 )
             val subtitle =
                 ClientboundSetSubtitleTextPacket(
@@ -921,12 +1175,30 @@ class WaveManager {
             defender.connection.send(anim)
             defender.connection.send(title)
             defender.connection.send(subtitle)
+
+            // Award epic veteran rewards to each surviving defender
+            val rewards =
+                listOf(
+                    ItemStack(Items.HEAVY_CORE, 1),
+                    ItemStack(Items.BREEZE_ROD, 4),
+                    ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 8),
+                    ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, 2),
+                    ItemStack(Items.NETHERITE_INGOT, 4),
+                    ItemStack(Items.NETHER_STAR, 1).apply {
+                        set(DataComponents.CUSTOM_NAME, Component.translatable("exservermod.waves.trophy_name"))
+                    },
+                )
+            for (reward in rewards) {
+                if (!defender.inventory.add(reward)) {
+                    defender.drop(reward, false)
+                }
+            }
         }
 
         server.playerList.broadcastSystemMessage(
             Component
                 .translatable("exservermod.waves.victory_chat", game.kills)
-                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                .withStyle(ChatFormatting.GOLD),
             false,
         )
 
@@ -946,7 +1218,7 @@ class WaveManager {
             val firework = FireworkRocketEntity(level, center.x, center.y + 1.5, center.z, fireworkStack)
             level.addFreshEntity(firework)
 
-            ExperienceOrb.award(level, center.add(0.0, 1.0, 0.0), VICTORY_XP)
+            ExperienceOrb.award(level, center.add(0.0, 1.0, 0.0), 2000)
             level.playSound(null, center.x, center.y, center.z, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.2f, 1.0f)
         }
 
@@ -960,9 +1232,9 @@ class WaveManager {
         isBoss: Boolean,
     ) {
         val key = if (isBoss) "exservermod.waves.wave_announce_boss" else "exservermod.waves.wave_announce"
-        val style = if (isBoss) ChatFormatting.RED to ChatFormatting.BOLD else ChatFormatting.YELLOW to ChatFormatting.BOLD
+        val color = if (isBoss) ChatFormatting.RED else ChatFormatting.YELLOW
         server.playerList.broadcastSystemMessage(
-            Component.translatable(key, wave, totalWaves).withStyle(style.first, style.second),
+            Component.translatable(key, wave, totalWaves).withStyle(color),
             false,
         )
         if (isBoss) {
@@ -988,15 +1260,7 @@ class WaveManager {
                         .translatable("exservermod.waves.actionbar.countdown", secondsLeft)
                         .withStyle(ChatFormatting.YELLOW)
                 }
-                WavePhase.FIGHT ->
-                    Component
-                        .translatable(
-                            "exservermod.waves.actionbar.fight",
-                            game.currentWave,
-                            WaveDefenseGame.TOTAL_WAVES,
-                            trackedMobs.size,
-                            game.kills,
-                        ).withStyle(ChatFormatting.RED)
+                WavePhase.FIGHT -> return // Single raid bossbar at top is used; no bottom HUD duplication
                 WavePhase.INTERMISSION -> {
                     val secondsLeft = game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND
                     Component

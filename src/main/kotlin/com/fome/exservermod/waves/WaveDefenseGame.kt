@@ -74,95 +74,93 @@ class WaveDefenseGame {
             when (wave) {
                 1 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:zombie", 10),
-                        WaveSpawnGroup("minecraft:skeleton", 6),
-                        WaveSpawnGroup("minecraft:spider", 4),
+                        WaveSpawnGroup("minecraft:zombie", 8),
+                        WaveSpawnGroup("minecraft:skeleton", 5),
+                        WaveSpawnGroup("minecraft:cave_spider", 2),
                     )
                 2 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:skeleton", 8),
-                        WaveSpawnGroup("minecraft:zombie", 6),
-                        WaveSpawnGroup("minecraft:cave_spider", 4),
-                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:zombie", 8),
+                        WaveSpawnGroup("minecraft:skeleton", 6),
+                        WaveSpawnGroup("minecraft:husk", 4),
                     )
                 3 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:witch", 4),
-                        WaveSpawnGroup("minecraft:drowned", 8),
-                        WaveSpawnGroup("minecraft:skeleton", 6),
-                        WaveSpawnGroup("minecraft:spider", 4),
+                        WaveSpawnGroup("minecraft:bogged", 6),
+                        WaveSpawnGroup("minecraft:vindicator", 6),
+                        WaveSpawnGroup("minecraft:husk", 4),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 4 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:vex", 6, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:stray", 8),
-                        WaveSpawnGroup("minecraft:zombie", 8),
-                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                        WaveSpawnGroup("minecraft:piglin_brute", 6),
+                        WaveSpawnGroup("minecraft:hoglin", 4),
+                        WaveSpawnGroup("minecraft:vex", 4, WaveMobRole.SPECTRAL_VEX),
                     )
                 5 ->
                     listOf(
                         WaveSpawnGroup("minecraft:blaze", 1, WaveMobRole.BLAZE_CHAMPION),
                         WaveSpawnGroup("minecraft:blaze", 6),
-                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
-                        WaveSpawnGroup("minecraft:skeleton", 6),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 6),
                         WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 6 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
-                        WaveSpawnGroup("minecraft:drowned", 8),
-                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:evoker", 2),
+                        WaveSpawnGroup("minecraft:vindicator", 8),
+                        WaveSpawnGroup("minecraft:bogged", 6),
+                        WaveSpawnGroup("minecraft:vex", 4, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 7 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:cave_spider", 12),
-                        WaveSpawnGroup("minecraft:spider", 6),
+                        WaveSpawnGroup("minecraft:warden", 1),
                         WaveSpawnGroup("minecraft:zombie", 8),
-                        WaveSpawnGroup("minecraft:vex", 6, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:witch", 4),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:husk", 5),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 8 ->
                     listOf(
                         WaveSpawnGroup("minecraft:witch", 1, WaveMobRole.WITCH_CHAMPION),
                         WaveSpawnGroup("minecraft:witch", 6),
-                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:skeleton", 8),
-                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                        WaveSpawnGroup("minecraft:piglin_brute", 8),
+                        WaveSpawnGroup("minecraft:vex", 5, WaveMobRole.SPECTRAL_VEX),
                     )
                 9 ->
                     listOf(
-                        WaveSpawnGroup("minecraft:zombie", 1, WaveMobRole.CHAMPION),
-                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
-                        WaveSpawnGroup("minecraft:stray", 8),
-                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
-                        WaveSpawnGroup("minecraft:drowned", 6),
+                        WaveSpawnGroup("minecraft:zombie", 12),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:hoglin", 6),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 10 ->
                     listOf(
                         WaveSpawnGroup("minecraft:zombie", 2, WaveMobRole.CHAMPION),
+                        WaveSpawnGroup("minecraft:vindicator", 8),
+                        WaveSpawnGroup("minecraft:evoker", 2),
+                        WaveSpawnGroup("minecraft:bogged", 8),
                         WaveSpawnGroup("minecraft:blaze", 6),
-                        WaveSpawnGroup("minecraft:vex", 8, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
-                        WaveSpawnGroup("minecraft:witch", 6),
-                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
+                        WaveSpawnGroup("minecraft:vex", 6, WaveMobRole.SPECTRAL_VEX),
                     )
                 11 ->
                     listOf(
                         WaveSpawnGroup("minecraft:blaze", 1, WaveMobRole.BLAZE_CHAMPION),
                         WaveSpawnGroup("minecraft:witch", 1, WaveMobRole.WITCH_CHAMPION),
                         WaveSpawnGroup("minecraft:zombie", 2, WaveMobRole.CHAMPION),
-                        WaveSpawnGroup("minecraft:vex", 10, WaveMobRole.SPECTRAL_VEX),
-                        WaveSpawnGroup("minecraft:blaze", 6),
-                        WaveSpawnGroup("minecraft:creeper", 6, WaveMobRole.GHOST_CREEPER),
-                        WaveSpawnGroup("minecraft:wither_skeleton", 8),
-                        WaveSpawnGroup("minecraft:witch", 6),
+                        WaveSpawnGroup("minecraft:zombie", 8),
+                        WaveSpawnGroup("minecraft:skeleton", 8),
+                        WaveSpawnGroup("minecraft:wither_skeleton", 6),
+                        WaveSpawnGroup("minecraft:vex", 5, WaveMobRole.SPECTRAL_VEX),
+                        WaveSpawnGroup("minecraft:creeper", 4, WaveMobRole.GHOST_CREEPER),
                     )
                 else -> emptyList()
             }
 
-        fun isBossWave(wave: Int): Boolean = wave == 5 || wave == 8 || wave == TOTAL_WAVES
+        fun isBossWave(wave: Int): Boolean = wave == 5 || wave == 7 || wave == 8 || wave == TOTAL_WAVES
 
         fun totalMobsInWave(groups: List<WaveSpawnGroup>): Int = groups.sumOf { it.count }
     }
