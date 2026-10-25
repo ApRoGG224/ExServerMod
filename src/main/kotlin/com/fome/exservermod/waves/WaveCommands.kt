@@ -14,6 +14,7 @@ import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
 
 class WaveCommands(
@@ -143,6 +144,7 @@ class WaveCommands(
         var arenaPos: Vec3? = null
         var displayArenaName: String? = null
 
+        val level = player.level()
         if (landmarkName != null) {
             val clean = landmarkName.trim().removeSurrounding("\"")
             val lm = landmarkManager.getLandmark(clean)
@@ -152,7 +154,9 @@ class WaveCommands(
                 )
                 return
             }
-            arenaPos = Vec3(lm.x, player.y, lm.z)
+            val surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, lm.x.toInt(), lm.z.toInt())
+            val y = if (surfaceY > level.minY) surfaceY.toDouble() else player.y
+            arenaPos = Vec3(lm.x, y, lm.z)
             displayArenaName = lm.name
         } else {
             // Check for pre-built arena landmarks if no argument was passed
@@ -161,7 +165,9 @@ class WaveCommands(
                     ?: landmarkManager.getLandmark("arena")
                     ?: landmarkManager.getLandmark("horde")
             if (defaultLm != null) {
-                arenaPos = Vec3(defaultLm.x, player.y, defaultLm.z)
+                val surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, defaultLm.x.toInt(), defaultLm.z.toInt())
+                val y = if (surfaceY > level.minY) surfaceY.toDouble() else player.y
+                arenaPos = Vec3(defaultLm.x, y, defaultLm.z)
                 displayArenaName = defaultLm.name
             }
         }

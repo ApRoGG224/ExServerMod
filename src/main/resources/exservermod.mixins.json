@@ -4,6 +4,7 @@
   "package": "com.fome.exservermod.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "CreeperAccessor",
     "EntityDimensionsMixin",
     "EntityTrackingPositionMixin",
     "ServerEntityMixin",

@@ -1,5 +1,6 @@
 package com.fome.exservermod.waves
 
+import com.fome.exservermod.mixin.CreeperAccessor
 import it.unimi.dsi.fastutil.ints.IntArrayList
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -54,7 +55,6 @@ import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
-import java.lang.reflect.Field
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
@@ -122,15 +122,6 @@ class WaveManager {
         ).apply {
             isVisible = false
         }
-
-    /** Zero world damage for creepers: zeroing their explosionRadius via reflection. */
-    private val creeperRadiusField: Field? by lazy {
-        try {
-            Creeper::class.java.getDeclaredField("explosionRadius").apply { isAccessible = true }
-        } catch (_: Throwable) {
-            null
-        }
-    }
 
     private var arenaCenter: Vec3? = null
     private var arenaLevel: ServerLevel? = null
@@ -335,8 +326,8 @@ class WaveManager {
             player.connection.send(subtitle)
         }
 
-        playSoundToDefenders(server, SoundEvents.WITHER_DEATH, 1.2f, 0.6f)
-        playSoundToDefenders(server, SoundEvents.VEX_DEATH, 1.5f, 0.8f)
+        playSoundToPlayers(server, defendersList, SoundEvents.WITHER_DEATH, 1.2f, 0.6f)
+        playSoundToPlayers(server, defendersList, SoundEvents.VEX_DEATH, 1.5f, 0.8f)
 
         server.playerList.broadcastSystemMessage(
             Component
@@ -426,6 +417,8 @@ class WaveManager {
             trackedMobs.clear()
             trackedMobRoles.clear()
             onWaveCleared(server)
+        } else {
+            currentWaveTotalMobs = trackedMobs.size
         }
     }
 
@@ -437,10 +430,9 @@ class WaveManager {
     ): Mob? {
         val mob = mobType.create(level, EntitySpawnReason.EVENT) as? Mob ?: return null
 
-        // Zero world damage for creepers
+        // Zero world damage for creepers via Mixin Accessor (guaranteed safe across mappings)
         if (mob is Creeper) {
-            val field = creeperRadiusField ?: return null
-            field.setInt(mob, 0)
+            (mob as CreeperAccessor).`exservermod$setExplosionRadius`(0)
         }
 
         // Prevent zombies from breaking doors in the arena
@@ -752,7 +744,7 @@ class WaveManager {
                 val ticks = last.second + 1
                 defenderStationaryTicks[defender.uuid] = last.first to ticks
                 // Camped in one corner for > 8 seconds (160 ticks)
-                if (ticks >= 160 && ticks % 100 == 0) {
+                if (ticks >= 160 && (ticks - 160) % 80 == 0) {
                     triggerSpectralFangs(level, defender)
                     defender.sendSystemMessage(
                         Component.translatable("exservermod.waves.anti_camp_warning").withStyle(ChatFormatting.RED),
@@ -1019,13 +1011,14 @@ class WaveManager {
         }
     }
 
-    private fun playSoundToDefenders(
+    private fun playSoundToPlayers(
         server: MinecraftServer,
+        playerUuids: Collection<UUID>,
         sound: Holder<SoundEvent>,
         volume: Float,
         pitch: Float,
     ) {
-        for (uuid in game.defenders) {
+        for (uuid in playerUuids) {
             val player = server.playerList.getPlayer(uuid) ?: continue
             player.connection.send(
                 ClientboundSoundPacket(
@@ -1040,6 +1033,25 @@ class WaveManager {
                 ),
             )
         }
+    }
+
+    private fun playSoundToPlayers(
+        server: MinecraftServer,
+        playerUuids: Collection<UUID>,
+        sound: SoundEvent,
+        volume: Float,
+        pitch: Float,
+    ) {
+        playSoundToPlayers(server, playerUuids, BuiltInRegistries.SOUND_EVENT.wrapAsHolder(sound), volume, pitch)
+    }
+
+    private fun playSoundToDefenders(
+        server: MinecraftServer,
+        sound: Holder<SoundEvent>,
+        volume: Float,
+        pitch: Float,
+    ) {
+        playSoundToPlayers(server, game.defenders, sound, volume, pitch)
     }
 
     private fun playSoundToDefenders(
