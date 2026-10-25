@@ -189,5 +189,7 @@
   "exservermod.waves.locate_success": "[Волны] Колокол обнаружения! Все монстры орды (%s) подсвечены на 15 секунд.",
   "exservermod.waves.locate_cooldown": "[Волны] Перезарядка колокола: подождите %s с.",
   "exservermod.waves.locate_not_fighting": "[Волны] Колокол можно использовать только во время боя!",
-  "exservermod.waves.trophy_name": "Трофей Победителя Кошмарной Орды (11 волн)"
+  "exservermod.waves.trophy_name": "Трофей Победителя Кошмарной Орды (11 волн)",
+  "exservermod.waves.reward.knockback_stick": "Отбрасывающая палка",
+  "exservermod.waves.reward.spartan_spear_drop": "[Волны] Редкая добыча! %s получает легендарное Копьё Спартанца (Spartan Spear)!"
 }

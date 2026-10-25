@@ -9,6 +9,7 @@ import net.minecraft.ChatFormatting
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.Holder
+import net.minecraft.core.HolderSet
 import net.minecraft.core.component.DataComponents
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
@@ -62,8 +63,11 @@ import net.minecraft.world.item.alchemy.PotionContents
 import net.minecraft.world.item.alchemy.Potions
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
+import net.minecraft.world.item.component.ItemLore
+import net.minecraft.world.item.enchantment.Enchantable
 import net.minecraft.world.item.enchantment.Enchantment
 import net.minecraft.world.item.enchantment.Enchantments
+import net.minecraft.world.item.enchantment.Repairable
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
 import java.util.UUID
@@ -1207,11 +1211,16 @@ class WaveManager {
             defender.connection.send(subtitle)
 
             // Award epic veteran rewards to each surviving defender
+            defender.giveExperienceLevels(50)
+
+            val rewardLevel = level ?: server.overworld()
             val rewards =
-                listOf(
+                mutableListOf(
                     ItemStack(Items.HEAVY_CORE, 1),
-                    ItemStack(Items.BREEZE_ROD, 4),
-                    ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 8),
+                    ItemStack(Items.BREEZE_ROD, 64),
+                    ItemStack(Items.BREEZE_ROD, 64),
+                    ItemStack(Items.GOLDEN_APPLE, 32),
+                    ItemStack(Items.EXPERIENCE_BOTTLE, 64),
                     ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, 2),
                     ItemStack(Items.NETHERITE_INGOT, 4),
                     ItemStack(Items.NETHER_STAR, 1).apply {
@@ -1222,7 +1231,63 @@ class WaveManager {
                                 .withStyle { it.withItalic(false).withColor(ChatFormatting.GOLD) },
                         )
                     },
+                    ItemStack(Items.STICK, 1).apply {
+                        set(
+                            DataComponents.CUSTOM_NAME,
+                            Component
+                                .translatable("exservermod.waves.reward.knockback_stick")
+                                .withStyle { it.withItalic(false).withColor(ChatFormatting.AQUA) },
+                        )
+                        enchantItem(rewardLevel, this, Enchantments.KNOCKBACK, 10)
+                    },
+                    PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_STRENGTH),
+                    PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_STRENGTH),
+                    PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_REGENERATION),
+                    PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_REGENERATION),
+                    PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_SWIFTNESS),
+                    PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_SWIFTNESS),
                 )
+
+            if (Random.nextFloat() < 0.10f) {
+                val spear =
+                    ItemStack(Items.NETHERITE_SPEAR).apply {
+                        set(
+                            DataComponents.CUSTOM_NAME,
+                            Component
+                                .literal("Spartan Spear")
+                                .withStyle { it.withItalic(false).withColor(ChatFormatting.GOLD) },
+                        )
+                        set(
+                            DataComponents.LORE,
+                            ItemLore(
+                                listOf(
+                                    Component
+                                        .literal("Forged for the 300.")
+                                        .withStyle { it.withItalic(true).withColor(ChatFormatting.GRAY) },
+                                    Component
+                                        .literal("Cannot be repaired or enchanted.")
+                                        .withStyle { it.withItalic(false).withColor(ChatFormatting.RED) },
+                                    Component
+                                        .literal("Breaks permanently upon depletion.")
+                                        .withStyle { it.withItalic(false).withColor(ChatFormatting.DARK_RED) },
+                                ),
+                            ),
+                        )
+                        enchantItem(rewardLevel, this, Enchantments.SHARPNESS, 10)
+                        enchantItem(rewardLevel, this, Enchantments.LUNGE, 5)
+                        set(DataComponents.ENCHANTABLE, Enchantable(0))
+                        set(DataComponents.REPAIRABLE, Repairable(HolderSet.empty()))
+                        set(DataComponents.REPAIR_COST, 1_000_000)
+                    }
+                rewards.add(spear)
+                server.playerList.broadcastSystemMessage(
+                    Component
+                        .translatable("exservermod.waves.reward.spartan_spear_drop", defender.name.string)
+                        .withStyle(ChatFormatting.GOLD),
+                    false,
+                )
+            }
+
             for (reward in rewards) {
                 if (!defender.inventory.add(reward)) {
                     defender.drop(reward, false)

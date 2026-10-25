@@ -189,5 +189,7 @@
   "exservermod.waves.locate_success": "[Waves] Detection bell sounded! All horde monsters (%s) are glowing for 15 seconds.",
   "exservermod.waves.locate_cooldown": "[Waves] Detection bell is on cooldown: wait %s s.",
   "exservermod.waves.locate_not_fighting": "[Waves] The detection bell can only be used during battle!",
-  "exservermod.waves.trophy_name": "Nightmare Horde Conqueror Trophy (11 Waves)"
+  "exservermod.waves.trophy_name": "Nightmare Horde Conqueror Trophy (11 Waves)",
+  "exservermod.waves.reward.knockback_stick": "Knockback Stick",
+  "exservermod.waves.reward.spartan_spear_drop": "[Waves] Rare drop! %s received the legendary Spartan Spear!"
 }
