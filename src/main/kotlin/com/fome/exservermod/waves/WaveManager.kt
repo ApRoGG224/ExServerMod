@@ -37,7 +37,6 @@ import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.EquipmentSlot
-import net.minecraft.world.entity.ExperienceOrb
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.ai.attributes.Attributes
@@ -1318,7 +1317,6 @@ class WaveManager {
             val firework = FireworkRocketEntity(level, center.x, center.y + 1.5, center.z, fireworkStack)
             level.addFreshEntity(firework)
 
-            ExperienceOrb.award(level, center.add(0.0, 1.0, 0.0), 2000)
             level.playSound(null, center.x, center.y, center.z, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 1.2f, 1.0f)
         }
 
