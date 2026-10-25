@@ -502,7 +502,7 @@ class WaveManager {
             WaveMobRole.BLAZE_CHAMPION -> configureBlazeChampion(mob)
             WaveMobRole.WITCH_CHAMPION -> configureWitchChampion(mob)
             WaveMobRole.GHOST_CREEPER -> configureGhostCreeper(mob)
-            WaveMobRole.CHAMPION -> configureDreadChampion(mob)
+            WaveMobRole.CHAMPION -> configureDreadChampion(level, mob)
             WaveMobRole.SPECTRAL_VEX -> configureSpectralVex(mob)
             WaveMobRole.STANDARD -> configureMobEquipment(level, mob, game.currentWave)
         }
@@ -556,7 +556,10 @@ class WaveManager {
         mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.28 }
     }
 
-    private fun configureDreadChampion(mob: Mob) {
+    private fun configureDreadChampion(
+        level: ServerLevel,
+        mob: Mob,
+    ) {
         mob.setCustomName(
             Component
                 .translatable("exservermod.waves.mob.dread_champion")
@@ -565,22 +568,39 @@ class WaveManager {
         mob.isCustomNameVisible = false
         mob.addTag("ex_dread_champion")
 
-        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 90.0 }
-        mob.health = 90.0f
-        mob.getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.let { it.baseValue = 0.75 }
+        // Guaranteed terrifying baby zombie Dread Champion
+        if (mob is Zombie) {
+            mob.setBaby(true)
+        }
 
-        val gear =
-            mapOf(
-                EquipmentSlot.HEAD to Items.NETHERITE_HELMET,
-                EquipmentSlot.CHEST to Items.NETHERITE_CHESTPLATE,
-                EquipmentSlot.LEGS to Items.NETHERITE_LEGGINGS,
-                EquipmentSlot.FEET to Items.NETHERITE_BOOTS,
-                EquipmentSlot.MAINHAND to Items.NETHERITE_SWORD,
-            )
-        for ((slot, item) in gear) {
-            mob.setItemSlot(slot, ItemStack(item))
+        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 100.0 }
+        mob.health = 100.0f
+        mob.getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.let { it.baseValue = 0.8 }
+        mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.35 }
+
+        val helmet = ItemStack(Items.NETHERITE_HELMET)
+        val chest = ItemStack(Items.NETHERITE_CHESTPLATE)
+        val legs = ItemStack(Items.NETHERITE_LEGGINGS)
+        val boots = ItemStack(Items.NETHERITE_BOOTS)
+        val sword = ItemStack(Items.NETHERITE_SWORD)
+
+        enchantItem(level, chest, Enchantments.PROTECTION, 4)
+        enchantItem(level, sword, Enchantments.SHARPNESS, 5)
+
+        mob.setItemSlot(EquipmentSlot.HEAD, helmet)
+        mob.setItemSlot(EquipmentSlot.CHEST, chest)
+        mob.setItemSlot(EquipmentSlot.LEGS, legs)
+        mob.setItemSlot(EquipmentSlot.FEET, boots)
+        mob.setItemSlot(EquipmentSlot.MAINHAND, sword)
+
+        for (slot in EquipmentSlot.entries) {
             mob.setDropChance(slot, 0.0f)
         }
+
+        mob.addEffect(MobEffectInstance(MobEffects.STRENGTH, MobEffectInstance.INFINITE_DURATION, 1, false, false))
+        mob.addEffect(MobEffectInstance(MobEffects.REGENERATION, MobEffectInstance.INFINITE_DURATION, 1, false, false))
+        mob.addEffect(MobEffectInstance(MobEffects.SPEED, MobEffectInstance.INFINITE_DURATION, 1, false, false))
+        mob.addEffect(MobEffectInstance(MobEffects.FIRE_RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0, false, false))
     }
 
     private fun configureSpectralVex(mob: Mob) {
@@ -687,6 +707,10 @@ class WaveManager {
         if (mob is Zombie || mob is WitherSkeleton) {
             when {
                 wave >= 8 -> {
+                    // Guaranteed terrifying baby zombies on late waves (wave 9, 11)
+                    if (mob is Zombie && Random.nextFloat() < 0.45f) {
+                        mob.setBaby(true)
+                    }
                     // Full Netherite + Strength II + Regen II + Speed I
                     val helmet = ItemStack(Items.NETHERITE_HELMET)
                     val chest = ItemStack(Items.NETHERITE_CHESTPLATE)
