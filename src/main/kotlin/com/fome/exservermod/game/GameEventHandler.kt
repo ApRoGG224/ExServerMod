@@ -129,8 +129,6 @@ class GameEventHandler(
                         activeLaserTicks = 0
                         level.server?.let { clearTrackerCompasses(it) }
 
-                        val seekerName = player.name.string
-                        val hiderName = entity.name.string
                         val elapsedSeconds = game.elapsedSeekingTicks / HideAndSeekGame.TICKS_PER_SECOND
                         val minutes = elapsedSeconds / 60
                         val seconds = elapsedSeconds % 60
@@ -185,8 +183,8 @@ class GameEventHandler(
                             Component
                                 .translatable(
                                     "exservermod.game.catch_announcement",
-                                    seekerName,
-                                    hiderName,
+                                    player.name,
+                                    entity.name,
                                     elapsedSeconds,
                                 ).withStyle(ChatFormatting.GOLD)
                         level.server?.playerList?.broadcastSystemMessage(catchMessage, false)
@@ -224,7 +222,7 @@ class GameEventHandler(
                                     Component
                                         .translatable(
                                             "exservermod.disguise.revealed",
-                                            entity.name.string,
+                                            entity.name,
                                             disguise.description,
                                         ).withStyle(ChatFormatting.GOLD)
                                 level.server?.playerList?.broadcastSystemMessage(revealMsg, false)
@@ -257,12 +255,12 @@ class GameEventHandler(
                     GamePhase.SEEKING -> {
                         playSoundToParticipants(server, SoundEvents.RAID_HORN, 2.0f, 1.0f)
                         val seeker = game.seekerUuid?.let { server.playerList.getPlayer(it) }
-                        val seekerName =
-                            seeker?.name?.string
-                                ?: Component.translatable("exservermod.game.fallback.seeker").string
+                        val seekerComponent: Component =
+                            seeker?.name
+                                ?: Component.translatable("exservermod.game.fallback.seeker")
                         server.playerList.broadcastSystemMessage(
                             Component
-                                .translatable("exservermod.game.seeking_announcement", seekerName)
+                                .translatable("exservermod.game.seeking_announcement", seekerComponent)
                                 .withStyle(ChatFormatting.RED),
                             false,
                         )
@@ -473,31 +471,29 @@ class GameEventHandler(
                     val minutes = elapsedSeconds / 60
                     val seconds = elapsedSeconds % 60
                     val timeFormatted = String.format("%02d:%02d", minutes, seconds)
-                    val seekerName =
+                    val seekerComponent: Component =
                         game.seekerUuid?.let {
                             server.playerList
                                 .getPlayer(it)
                                 ?.name
-                                ?.string
-                        } ?: Component.translatable("exservermod.game.fallback.seeker").string
+                        } ?: Component.translatable("exservermod.game.fallback.seeker")
                     val msg =
                         Component
-                            .translatable("exservermod.game.actionbar.seeking", timeFormatted, seekerName)
+                            .translatable("exservermod.game.actionbar.seeking", timeFormatted, seekerComponent)
                             .withStyle(ChatFormatting.GOLD)
                     game.hiderUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
                     game.seekerUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
                 } else if (game.phase == GamePhase.INTERMISSION) {
                     val secondsLeft = game.remainingTicks / HideAndSeekGame.TICKS_PER_SECOND
-                    val nextHiderName =
+                    val nextHiderComponent: Component =
                         game.seekerUuid?.let {
                             server.playerList
                                 .getPlayer(it)
                                 ?.name
-                                ?.string
-                        } ?: Component.translatable("exservermod.game.fallback.hider").string
+                        } ?: Component.translatable("exservermod.game.fallback.hider")
                     val msg =
                         Component
-                            .translatable("exservermod.game.actionbar.intermission", nextHiderName, secondsLeft)
+                            .translatable("exservermod.game.actionbar.intermission", nextHiderComponent, secondsLeft)
                             .withStyle(ChatFormatting.AQUA)
                     game.hiderUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
                     game.seekerUuid?.let { server.playerList.getPlayer(it)?.sendSystemMessage(msg, true) }
@@ -849,7 +845,7 @@ class GameEventHandler(
                 game.leave(handler.player.uuid)
                 server.playerList.broadcastSystemMessage(
                     Component
-                        .translatable("exservermod.game.cancelled", handler.player.name.string)
+                        .translatable("exservermod.game.cancelled", handler.player.name)
                         .withStyle(ChatFormatting.GRAY),
                     false,
                 )
@@ -888,7 +884,7 @@ class GameEventHandler(
                     BlueMapCompat.setPlayersVisibility(participants, true)
                     ctx.server().playerList.broadcastSystemMessage(
                         Component
-                            .translatable("exservermod.game.cancelled_roulette", player.name.string)
+                            .translatable("exservermod.game.cancelled_roulette", player.name)
                             .withStyle(ChatFormatting.GRAY),
                         false,
                     )

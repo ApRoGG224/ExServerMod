@@ -2,12 +2,14 @@ package com.fome.exservermod.waves
 
 import java.util.UUID
 
-enum class WavePhase {
-    IDLE,
-    COUNTDOWN,
-    FIGHT,
-    INTERMISSION,
-    VICTORY,
+enum class WavePhase(
+    val translationKey: String,
+) {
+    IDLE("exservermod.waves.phase.idle"),
+    COUNTDOWN("exservermod.waves.phase.countdown"),
+    FIGHT("exservermod.waves.phase.fight"),
+    INTERMISSION("exservermod.waves.phase.intermission"),
+    VICTORY("exservermod.waves.phase.victory"),
 }
 
 enum class WaveMobRole {

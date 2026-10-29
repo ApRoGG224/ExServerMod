@@ -266,7 +266,7 @@ class WaveCommands(
             }
         server.playerList.broadcastSystemMessage(
             Component
-                .translatable("exservermod.waves.stopped_by", player.name.string)
+                .translatable("exservermod.waves.stopped_by", player.name)
                 .withStyle(ChatFormatting.GRAY)
                 .append(" ")
                 .append(startBtn),

@@ -1,5 +1,6 @@
 package com.fome.exservermod.afk
 
+import com.fome.exservermod.landmarks.DimensionFormatter
 import com.fome.exservermod.landmarks.Landmark
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.mojang.brigadier.arguments.StringArgumentType
@@ -105,7 +106,7 @@ class AfkCommands(
                             bot.blockX,
                             bot.blockY,
                             bot.blockZ,
-                            bot.level().dimension().identifier(),
+                            DimensionFormatter.format(bot.level().dimension().identifier()),
                         ).withStyle(ChatFormatting.GREEN)
                 },
                 false,
@@ -360,7 +361,13 @@ class AfkCommands(
                 )
             AfkTeleportResult.WRONG_DIMENSION ->
                 source.sendSuccess(
-                    { Component.translatable("exservermod.afk.wrong_dimension", landmark.dimension).withStyle(ChatFormatting.RED) },
+                    {
+                        Component
+                            .translatable(
+                                "exservermod.afk.wrong_dimension",
+                                DimensionFormatter.format(landmark.dimension),
+                            ).withStyle(ChatFormatting.RED)
+                    },
                     false,
                 )
             AfkTeleportResult.UNSAFE_SPOT ->

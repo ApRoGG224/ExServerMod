@@ -116,7 +116,7 @@ class LandmarkCommands(
                         player.x,
                         player.z,
                         radius,
-                        dim,
+                        DimensionFormatter.format(dim),
                     ).withStyle(ChatFormatting.GREEN),
             )
         } else {
@@ -174,7 +174,7 @@ class LandmarkCommands(
                         landmark.x,
                         landmark.z,
                         landmark.radius,
-                        landmark.dimension,
+                        DimensionFormatter.format(landmark.dimension),
                     ).withStyle(ChatFormatting.YELLOW),
             )
         }

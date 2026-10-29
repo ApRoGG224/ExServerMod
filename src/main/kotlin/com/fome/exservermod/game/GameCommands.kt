@@ -213,7 +213,7 @@ class GameCommands(
                 val seconds = game.remainingTicks / HideAndSeekGame.TICKS_PER_SECOND
                 player.sendSystemMessage(
                     Component
-                        .translatable("exservermod.game.status.hiding", seconds, game.mode)
+                        .translatable("exservermod.game.status.hiding", seconds, Component.translatable(game.mode.translationKey))
                         .withStyle(ChatFormatting.YELLOW),
                 )
                 if (game.isParticipant(player.uuid)) {
@@ -265,16 +265,15 @@ class GameCommands(
                 }
             }
             GamePhase.INTERMISSION -> {
-                val winnerName =
+                val winnerComponent: Component =
                     game.winnerUuid?.let {
                         server.playerList
                             .getPlayer(it)
                             ?.name
-                            ?.string
-                    } ?: Component.translatable("exservermod.game.fallback.seeker").string
+                    } ?: Component.translatable("exservermod.game.fallback.seeker")
                 player.sendSystemMessage(
                     Component
-                        .translatable("exservermod.game.status.intermission", winnerName)
+                        .translatable("exservermod.game.status.intermission", winnerComponent)
                         .withStyle(ChatFormatting.GOLD),
                 )
                 val continueBtn =
@@ -368,26 +367,24 @@ class GameCommands(
 
                 BlueMapCompat.setPlayersVisibility(listOf(result.hiderUuid, result.seekerUuid), false)
 
-                val hiderName =
+                val hiderComponent: Component =
                     server.playerList
                         .getPlayer(result.hiderUuid)
-                        ?.name
-                        ?.string ?: Component.translatable("exservermod.game.fallback.hider").string
-                val seekerName =
+                        ?.name ?: Component.translatable("exservermod.game.fallback.hider")
+                val seekerComponent: Component =
                     server.playerList
                         .getPlayer(result.seekerUuid)
-                        ?.name
-                        ?.string ?: Component.translatable("exservermod.game.fallback.seeker").string
+                        ?.name ?: Component.translatable("exservermod.game.fallback.seeker")
 
                 server.playerList.broadcastSystemMessage(
                     Component
-                        .translatable("exservermod.game.vote.started", result.mode)
+                        .translatable("exservermod.game.vote.started", Component.translatable(result.mode.translationKey))
                         .withStyle(ChatFormatting.GREEN),
                     false,
                 )
                 server.playerList.broadcastSystemMessage(
                     Component
-                        .translatable("exservermod.game.players_assigned", hiderName, seekerName)
+                        .translatable("exservermod.game.players_assigned", hiderComponent, seekerComponent)
                         .withStyle(ChatFormatting.GOLD),
                     false,
                 )
@@ -473,20 +470,18 @@ class GameCommands(
                 }
             }
 
-            val hiderName =
+            val hiderComponent: Component =
                 game.hiderUuid?.let {
                     server.playerList
                         .getPlayer(it)
                         ?.name
-                        ?.string
-                } ?: Component.translatable("exservermod.game.fallback.hider").string
-            val seekerName =
+                } ?: Component.translatable("exservermod.game.fallback.hider")
+            val seekerComponent: Component =
                 game.seekerUuid?.let {
                     server.playerList
                         .getPlayer(it)
                         ?.name
-                        ?.string
-                } ?: Component.translatable("exservermod.game.fallback.seeker").string
+                } ?: Component.translatable("exservermod.game.fallback.seeker")
 
             server.playerList.broadcastSystemMessage(
                 Component
@@ -496,7 +491,7 @@ class GameCommands(
             )
             server.playerList.broadcastSystemMessage(
                 Component
-                    .translatable("exservermod.game.players_assigned", hiderName, seekerName)
+                    .translatable("exservermod.game.players_assigned", hiderComponent, seekerComponent)
                     .withStyle(ChatFormatting.GOLD),
                 false,
             )
@@ -602,9 +597,10 @@ class GameCommands(
                     if (mobType != null) {
                         val (hintMsg, category) = MobPool.getNextHint(mobType, game.hintCategoryHistory)
                         game.recordHintCategory(category)
-                        val prefix = Component.translatable("exservermod.game.hint.prefix").withStyle(ChatFormatting.LIGHT_PURPLE)
-                        val full = Component.empty().append(prefix).append(hintMsg.withStyle(ChatFormatting.LIGHT_PURPLE))
-                        server.playerList.broadcastSystemMessage(full, false)
+                        server.playerList.broadcastSystemMessage(
+                            hintMsg.withStyle(ChatFormatting.LIGHT_PURPLE),
+                            false,
+                        )
                     }
                 } else {
                     val hider = game.hiderUuid?.let { server.playerList.getPlayer(it) }
@@ -676,7 +672,7 @@ class GameCommands(
             BlueMapCompat.setPlayersVisibility(participants, true)
             server.playerList.broadcastSystemMessage(
                 Component
-                    .translatable("exservermod.game.cancelled", player.name.string)
+                    .translatable("exservermod.game.cancelled", player.name)
                     .withStyle(ChatFormatting.GRAY),
                 false,
             )

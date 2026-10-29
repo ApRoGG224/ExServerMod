@@ -300,7 +300,7 @@ class WaveManager {
                 game.currentWave.coerceAtLeast(1),
                 WaveDefenseGame.TOTAL_WAVES,
                 game.kills,
-                game.phase.name,
+                Component.translatable(game.phase.translationKey),
             ).withStyle(ChatFormatting.GOLD)
 
     private fun abort(
@@ -351,7 +351,7 @@ class WaveManager {
                     Component
                         .translatable(
                             "exservermod.waves.defeat_subtitle",
-                            fallenDefender.name.string,
+                            fallenDefender.name,
                             currentWave,
                             WaveDefenseGame.TOTAL_WAVES,
                         ).withStyle(ChatFormatting.RED),
@@ -368,7 +368,7 @@ class WaveManager {
             Component
                 .translatable(
                     "exservermod.waves.defeat_chat",
-                    fallenDefender.name.string,
+                    fallenDefender.name,
                     currentWave,
                     WaveDefenseGame.TOTAL_WAVES,
                     kills,
@@ -1281,7 +1281,7 @@ class WaveManager {
                 rewards.add(spear)
                 server.playerList.broadcastSystemMessage(
                     Component
-                        .translatable("exservermod.waves.reward.spartan_spear_drop", defender.name.string)
+                        .translatable("exservermod.waves.reward.spartan_spear_drop", defender.name)
                         .withStyle(ChatFormatting.GOLD),
                     false,
                 )
