@@ -1,10 +1,13 @@
 package com.fome.exservermod.waves
 
 import com.fome.exservermod.mixin.CreeperAccessor
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import it.unimi.dsi.fastutil.ints.IntArrayList
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
+import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.ChatFormatting
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
@@ -14,7 +17,10 @@ import net.minecraft.core.component.DataComponents
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.core.registries.Registries
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.HoverEvent
 import net.minecraft.network.chat.MutableComponent
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket
@@ -60,6 +66,7 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.world.item.alchemy.PotionContents
 import net.minecraft.world.item.alchemy.Potions
+import net.minecraft.world.item.component.CustomData
 import net.minecraft.world.item.component.FireworkExplosion
 import net.minecraft.world.item.component.Fireworks
 import net.minecraft.world.item.component.ItemLore
@@ -67,13 +74,20 @@ import net.minecraft.world.item.enchantment.Enchantable
 import net.minecraft.world.item.enchantment.Enchantment
 import net.minecraft.world.item.enchantment.Enchantments
 import net.minecraft.world.item.enchantment.Repairable
+import net.minecraft.world.item.equipment.Equippable
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
+
+data class WaveCheckpointData(
+    val wave: Int = 0,
+    val timestamp: Long = 0L,
+)
 
 /**
  * Server-side engine for the wave defense mini-game:
@@ -153,6 +167,216 @@ class WaveManager {
 
     private var lastLocateTimestamp: Long = 0L
 
+    private val checkpointFile: File by lazy {
+        FabricLoader
+            .getInstance()
+            .configDir
+            .resolve("exservermod/wave_checkpoint.json")
+            .toFile()
+    }
+
+    private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
+
+    fun getSavedCheckpoint(): Int? =
+        try {
+            if (!checkpointFile.exists()) {
+                null
+            } else {
+                val data = gson.fromJson(checkpointFile.readText(), WaveCheckpointData::class.java)
+                if (data != null && data.wave in 2..WaveDefenseGame.TOTAL_WAVES) data.wave else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+
+    fun saveCheckpoint(wave: Int) {
+        try {
+            checkpointFile.parentFile?.mkdirs()
+            val data = WaveCheckpointData(wave = wave, timestamp = System.currentTimeMillis())
+            checkpointFile.writeText(gson.toJson(data))
+        } catch (_: Exception) {
+        }
+    }
+
+    fun clearCheckpoint() {
+        try {
+            if (checkpointFile.exists()) {
+                checkpointFile.delete()
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    fun createHorsemanLantern(level: ServerLevel): ItemStack {
+        val stack = ItemStack(Items.JACK_O_LANTERN)
+        stack.set(
+            DataComponents.CUSTOM_NAME,
+            Component
+                .translatable("exservermod.waves.horseman_lantern.name")
+                .withStyle { it.withItalic(false).withColor(ChatFormatting.GOLD) },
+        )
+        stack.set(
+            DataComponents.LORE,
+            ItemLore(
+                listOf(
+                    Component
+                        .translatable("exservermod.waves.horseman_lantern.lore1")
+                        .withStyle { it.withItalic(true).withColor(ChatFormatting.DARK_PURPLE) },
+                    Component
+                        .translatable("exservermod.waves.horseman_lantern.lore2")
+                        .withStyle { it.withItalic(false).withColor(ChatFormatting.YELLOW) },
+                    Component
+                        .translatable("exservermod.waves.horseman_lantern.lore3")
+                        .withStyle { it.withItalic(false).withColor(ChatFormatting.AQUA) },
+                ),
+            ),
+        )
+        val equippable =
+            Equippable
+                .builder(EquipmentSlot.HEAD)
+                .setEquipSound(SoundEvents.ARMOR_EQUIP_GENERIC)
+                .setSwappable(true)
+                .build()
+        stack.set(DataComponents.EQUIPPABLE, equippable)
+        enchantItem(level, stack, Enchantments.PROTECTION, 4)
+        val tag =
+            CompoundTag().apply {
+                putBoolean("ex_horseman_lantern", true)
+            }
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag))
+        return stack
+    }
+
+    fun isHorsemanLantern(stack: ItemStack): Boolean {
+        if (stack.item != Items.JACK_O_LANTERN) return false
+        val customData = stack.get(DataComponents.CUSTOM_DATA) ?: return false
+        return customData.copyTag().getBooleanOr("ex_horseman_lantern", false)
+    }
+
+    fun broadcastTrickOrTreatPrompt(server: MinecraftServer) {
+        val savedCheckpoint = getSavedCheckpoint()
+        val seconds = WaveDefenseGame.TRICK_OR_TREAT_SECONDS
+
+        val header = Component.translatable("exservermod.waves.tot.title").withStyle(ChatFormatting.GOLD)
+        val subtitle = Component.translatable("exservermod.waves.tot.subtitle", seconds).withStyle(ChatFormatting.YELLOW)
+
+        val trickBtn =
+            Component.translatable("exservermod.waves.tot.button_trick").withStyle { style ->
+                style
+                    .withColor(ChatFormatting.RED)
+                    .withBold(true)
+                    .withClickEvent(ClickEvent.RunCommand("/waves choice trick"))
+                    .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.waves.tot.hover_trick")))
+            }
+
+        val treatBtn =
+            if (savedCheckpoint != null) {
+                Component.translatable("exservermod.waves.tot.button_treat_resume", savedCheckpoint).withStyle { style ->
+                    style
+                        .withColor(ChatFormatting.AQUA)
+                        .withBold(true)
+                        .withClickEvent(ClickEvent.RunCommand("/waves choice treat"))
+                        .withHoverEvent(
+                            HoverEvent.ShowText(
+                                Component.translatable("exservermod.waves.tot.hover_treat_resume", savedCheckpoint),
+                            ),
+                        )
+                }
+            } else {
+                Component.translatable("exservermod.waves.tot.button_treat").withStyle { style ->
+                    style
+                        .withColor(ChatFormatting.GOLD)
+                        .withBold(true)
+                        .withClickEvent(ClickEvent.RunCommand("/waves choice treat"))
+                        .withHoverEvent(HoverEvent.ShowText(Component.translatable("exservermod.waves.tot.hover_treat")))
+                }
+            }
+
+        val buttonsLine =
+            Component
+                .empty()
+                .append("   ")
+                .append(trickBtn)
+                .append("    ")
+                .append(treatBtn)
+
+        server.playerList.broadcastSystemMessage(Component.empty(), false)
+        server.playerList.broadcastSystemMessage(header, false)
+        server.playerList.broadcastSystemMessage(subtitle, false)
+        server.playerList.broadcastSystemMessage(buttonsLine, false)
+        server.playerList.broadcastSystemMessage(Component.empty(), false)
+
+        playSoundToDefenders(server, SoundEvents.WITHER_SPAWN, 1.0f, 1.5f)
+        playSoundToDefenders(server, SoundEvents.GHAST_SCREAM, 0.8f, 0.9f)
+    }
+
+    fun handleHalloweenChoice(
+        player: ServerPlayer,
+        choice: HalloweenChoice,
+    ): Boolean {
+        val server = player.level().server
+        if (game.phase != WavePhase.TRICK_OR_TREAT) {
+            player.sendSystemMessage(
+                Component.translatable("exservermod.waves.error.not_in_choice").withStyle(ChatFormatting.RED),
+            )
+            return false
+        }
+        if (!game.defenders.contains(player.uuid)) {
+            player.sendSystemMessage(
+                Component.translatable("exservermod.waves.error.not_a_defender").withStyle(ChatFormatting.RED),
+            )
+            return false
+        }
+
+        when (choice) {
+            HalloweenChoice.TRICK -> {
+                if (!game.chooseTrick()) return false
+                server.playerList.broadcastSystemMessage(
+                    Component
+                        .translatable("exservermod.waves.tot.announced_trick", player.name)
+                        .withStyle(ChatFormatting.DARK_RED),
+                    false,
+                )
+                playSoundToDefenders(server, SoundEvents.ENDERMAN_SCREAM, 1.2f, 0.7f)
+                playSoundToDefenders(server, SoundEvents.WITHER_SHOOT, 1.0f, 0.8f)
+                return true
+            }
+            HalloweenChoice.TREAT -> {
+                val savedCheckpoint = getSavedCheckpoint()
+                if (!game.chooseTreat(savedCheckpoint)) return false
+                if (savedCheckpoint != null) {
+                    clearCheckpoint()
+                    server.playerList.broadcastSystemMessage(
+                        Component
+                            .translatable("exservermod.waves.tot.announced_treat_resume", player.name, savedCheckpoint)
+                            .withStyle(ChatFormatting.AQUA),
+                        false,
+                    )
+                    playSoundToDefenders(server, SoundEvents.PORTAL_TRAVEL, 1.0f, 1.2f)
+                    playSoundToDefenders(server, SoundEvents.PLAYER_LEVELUP, 1.2f, 1.1f)
+                } else {
+                    for (uuid in game.defenders) {
+                        val defender = server.playerList.getPlayer(uuid) ?: continue
+                        val stack = ItemStack(Items.EXPERIENCE_BOTTLE, 64)
+                        if (!defender.inventory.add(stack)) {
+                            defender.drop(stack, false)
+                        }
+                    }
+                    server.playerList.broadcastSystemMessage(
+                        Component
+                            .translatable("exservermod.waves.tot.announced_treat_fresh", player.name)
+                            .withStyle(ChatFormatting.GOLD),
+                        false,
+                    )
+                    playSoundToDefenders(server, SoundEvents.PLAYER_LEVELUP, 1.2f, 1.2f)
+                    playSoundToDefenders(server, SoundEvents.EXPERIENCE_ORB_PICKUP, 1.5f, 1.0f)
+                }
+                return true
+            }
+            HalloweenChoice.NONE -> return false
+        }
+    }
+
     fun register() {
         registerTick()
         registerEntityDeath()
@@ -164,7 +388,42 @@ class WaveManager {
             when (val result = game.tick()) {
                 is WaveTickResult.WaveStarted -> spawnWave(server, result)
                 is WaveTickResult.Victory -> onVictory(server)
+                is WaveTickResult.TrickWaveCleared -> {
+                    server.playerList.broadcastSystemMessage(
+                        Component.translatable("exservermod.waves.tot.trick_cleared").withStyle(ChatFormatting.GOLD),
+                        false,
+                    )
+                    playSoundToDefenders(server, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.2f)
+                }
+                is WaveTickResult.PhaseChanged -> {
+                    if (result.oldPhase == WavePhase.TRICK_OR_TREAT && result.newPhase == WavePhase.INTERMISSION) {
+                        server.playerList.broadcastSystemMessage(
+                            Component.translatable("exservermod.waves.tot.timeout").withStyle(ChatFormatting.GRAY),
+                            false,
+                        )
+                        playSoundToDefenders(server, SoundEvents.NOTE_BLOCK_BASS, 1.0f, 0.8f)
+                    }
+                }
                 else -> {}
+            }
+
+            // Headless Horseman's Lantern Night Vision effect while worn
+            if (server.tickCount % 20 == 0) {
+                for (player in server.playerList.players) {
+                    val helmet = player.getItemBySlot(EquipmentSlot.HEAD)
+                    if (isHorsemanLantern(helmet)) {
+                        player.addEffect(
+                            MobEffectInstance(
+                                MobEffects.NIGHT_VISION,
+                                240,
+                                0,
+                                false,
+                                false,
+                                true,
+                            ),
+                        )
+                    }
+                }
             }
 
             if (game.isActive()) {
@@ -325,8 +584,38 @@ class WaveManager {
     ) {
         if (!game.isActive()) return
         val currentWave = game.currentWave
+
+        // Check if Trick Second Chance token is available to save the squad!
+        if (game.triggerSecondChanceRecovery()) {
+            clearMobs()
+            playSoundToDefenders(server, SoundEvents.TOTEM_USE, 1.5f, 1.0f)
+            playSoundToDefenders(server, SoundEvents.BELL_RESONATE, 2.0f, 0.8f)
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable(
+                        "exservermod.waves.tot.second_chance_used",
+                        fallenDefender.name,
+                        WaveDefenseGame.RECOVERY_SECONDS,
+                        currentWave,
+                    ).withStyle(ChatFormatting.GOLD),
+                false,
+            )
+            return
+        }
+
         val kills = game.kills
         val defendersList = game.defenders.toSet() + fallenDefender.uuid
+        val shouldSaveCheckpoint = game.willSaveCheckpointOnDeath && currentWave >= 2
+
+        if (shouldSaveCheckpoint) {
+            saveCheckpoint(currentWave)
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.waves.tot.checkpoint_saved", currentWave)
+                    .withStyle(ChatFormatting.YELLOW),
+                false,
+            )
+        }
 
         setArenaChunksForced(arenaLevel, arenaCenter, false)
 
@@ -433,7 +722,18 @@ class WaveManager {
         val center = arenaCenter ?: return
 
         currentWaveTotalMobs = WaveDefenseGame.totalMobsInWave(result.groups)
-        announceWave(server, result.wave, result.totalWaves, WaveDefenseGame.isBossWave(result.wave))
+        if (result.isTrick) {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.waves.wave_announce_trick", result.wave, result.totalWaves)
+                    .withStyle(ChatFormatting.DARK_RED),
+                false,
+            )
+            playSoundToDefenders(server, SoundEvents.WITHER_SPAWN, 1.5f, 0.6f)
+            playSoundToDefenders(server, SoundEvents.ENDER_DRAGON_GROWL, 1.2f, 0.8f)
+        } else {
+            announceWave(server, result.wave, result.totalWaves, WaveDefenseGame.isBossWave(result.wave))
+        }
 
         var spawnedAny = false
         for (group in result.groups) {
@@ -1100,12 +1400,21 @@ class WaveManager {
                 val remaining = trackedMobs.size
                 val total = currentWaveTotalMobs.coerceAtLeast(1)
                 bossBar.name =
-                    Component.translatable(
-                        "exservermod.waves.bossbar.fight",
-                        game.currentWave,
-                        WaveDefenseGame.TOTAL_WAVES,
-                        remaining,
-                    )
+                    if (game.isTrickWave && game.currentWave == 2) {
+                        Component.translatable(
+                            "exservermod.waves.bossbar.fight_trick",
+                            game.currentWave,
+                            WaveDefenseGame.TOTAL_WAVES,
+                            remaining,
+                        )
+                    } else {
+                        Component.translatable(
+                            "exservermod.waves.bossbar.fight",
+                            game.currentWave,
+                            WaveDefenseGame.TOTAL_WAVES,
+                            remaining,
+                        )
+                    }
                 bossBar.progress = (remaining.toFloat() / total.toFloat()).coerceIn(0.0f, 1.0f)
                 bossBar.color =
                     if (WaveDefenseGame.isBossWave(game.currentWave)) {
@@ -1114,6 +1423,14 @@ class WaveManager {
                         BossEvent.BossBarColor.RED
                     }
                 bossBar.overlay = BossEvent.BossBarOverlay.NOTCHED_10
+            }
+            WavePhase.TRICK_OR_TREAT -> {
+                val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
+                bossBar.name = Component.translatable("exservermod.waves.bossbar.trick_or_treat", secondsLeft)
+                bossBar.progress =
+                    (game.remainingTicks.toFloat() / WaveDefenseGame.TRICK_OR_TREAT_TICKS.toFloat()).coerceIn(0.0f, 1.0f)
+                bossBar.color = BossEvent.BossBarColor.YELLOW
+                bossBar.overlay = BossEvent.BossBarOverlay.PROGRESS
             }
             WavePhase.INTERMISSION -> {
                 val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
@@ -1126,6 +1443,20 @@ class WaveManager {
                     )
                 bossBar.progress = (game.remainingTicks.toFloat() / WaveDefenseGame.INTERMISSION_TICKS.toFloat()).coerceIn(0.0f, 1.0f)
                 bossBar.color = BossEvent.BossBarColor.GREEN
+                bossBar.overlay = BossEvent.BossBarOverlay.PROGRESS
+            }
+            WavePhase.RECOVERY -> {
+                val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
+                val restartingWave = game.currentWave + 1
+                bossBar.name =
+                    Component.translatable(
+                        "exservermod.waves.bossbar.recovery",
+                        secondsLeft,
+                        restartingWave,
+                    )
+                bossBar.progress =
+                    (game.remainingTicks.toFloat() / WaveDefenseGame.RECOVERY_TICKS.toFloat()).coerceIn(0.0f, 1.0f)
+                bossBar.color = BossEvent.BossBarColor.YELLOW
                 bossBar.overlay = BossEvent.BossBarOverlay.PROGRESS
             }
             else -> {}
@@ -1165,8 +1496,17 @@ class WaveManager {
     private fun onWaveCleared(server: MinecraftServer) {
         when (val cleared = game.onWaveCleared()) {
             is WaveTickResult.Victory -> Unit
+            is WaveTickResult.TrickWaveCleared -> {
+                server.playerList.broadcastSystemMessage(
+                    Component.translatable("exservermod.waves.tot.trick_cleared").withStyle(ChatFormatting.GOLD),
+                    false,
+                )
+                playSoundToDefenders(server, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.2f)
+            }
             is WaveTickResult.PhaseChanged -> {
-                if (cleared.newPhase == WavePhase.INTERMISSION) {
+                if (cleared.newPhase == WavePhase.TRICK_OR_TREAT) {
+                    broadcastTrickOrTreatPrompt(server)
+                } else if (cleared.newPhase == WavePhase.INTERMISSION) {
                     server.playerList.broadcastSystemMessage(
                         Component
                             .translatable(
@@ -1186,7 +1526,13 @@ class WaveManager {
     private fun onVictory(server: MinecraftServer) {
         val level = arenaLevel
         val center = arenaCenter
+        val wasTrick = game.halloweenChoice == HalloweenChoice.TRICK
+        val spearChance = if (wasTrick) 1.0f else 0.67f
+        val breezeStacks = if (wasTrick) 4 else 2
+        val goldenAppleCount = if (wasTrick) 64 else 32
+        val expStacks = if (wasTrick) 2 else 1
 
+        clearCheckpoint()
         setArenaChunksForced(level, center, false)
         clearMobs()
         bossBar.removeAllPlayers()
@@ -1215,11 +1561,9 @@ class WaveManager {
             val rewardLevel = level ?: server.overworld()
             val rewards =
                 mutableListOf(
+                    createHorsemanLantern(rewardLevel),
                     ItemStack(Items.HEAVY_CORE, 1),
-                    ItemStack(Items.BREEZE_ROD, 64),
-                    ItemStack(Items.BREEZE_ROD, 64),
-                    ItemStack(Items.GOLDEN_APPLE, 32),
-                    ItemStack(Items.EXPERIENCE_BOTTLE, 64),
+                    ItemStack(Items.GOLDEN_APPLE, goldenAppleCount),
                     ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, 2),
                     ItemStack(Items.NETHERITE_INGOT, 4),
                     ItemStack(Items.NETHER_STAR, 1).apply {
@@ -1247,7 +1591,14 @@ class WaveManager {
                     PotionContents.createItemStack(Items.SPLASH_POTION, Potions.STRONG_SWIFTNESS),
                 )
 
-            if (Random.nextFloat() < 0.10f) {
+            repeat(breezeStacks) {
+                rewards.add(ItemStack(Items.BREEZE_ROD, 64))
+            }
+            repeat(expStacks) {
+                rewards.add(ItemStack(Items.EXPERIENCE_BOTTLE, 64))
+            }
+
+            if (Random.nextFloat() < spearChance) {
                 val spear =
                     ItemStack(Items.NETHERITE_SPEAR).apply {
                         set(
@@ -1294,12 +1645,21 @@ class WaveManager {
             }
         }
 
-        server.playerList.broadcastSystemMessage(
-            Component
-                .translatable("exservermod.waves.victory_chat", game.kills)
-                .withStyle(ChatFormatting.GOLD),
-            false,
-        )
+        if (wasTrick) {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.waves.victory_chat_trick", game.kills)
+                    .withStyle(ChatFormatting.GOLD),
+                false,
+            )
+        } else {
+            server.playerList.broadcastSystemMessage(
+                Component
+                    .translatable("exservermod.waves.victory_chat", game.kills)
+                    .withStyle(ChatFormatting.GOLD),
+                false,
+            )
+        }
 
         if (level != null && center != null) {
             val fireworkStack = ItemStack(Items.FIREWORK_ROCKET)
@@ -1358,12 +1718,25 @@ class WaveManager {
                         .translatable("exservermod.waves.actionbar.countdown", secondsLeft)
                         .withStyle(ChatFormatting.YELLOW)
                 }
+                WavePhase.TRICK_OR_TREAT -> {
+                    val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
+                    Component
+                        .translatable("exservermod.waves.actionbar.trick_or_treat", secondsLeft)
+                        .withStyle(ChatFormatting.GOLD)
+                }
                 WavePhase.FIGHT -> return // Single raid bossbar at top is used; no bottom HUD duplication
                 WavePhase.INTERMISSION -> {
                     val secondsLeft = game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND
                     Component
                         .translatable("exservermod.waves.actionbar.intermission", game.currentWave + 1, secondsLeft)
                         .withStyle(ChatFormatting.GREEN)
+                }
+                WavePhase.RECOVERY -> {
+                    val secondsLeft = (game.remainingTicks / WaveDefenseGame.TICKS_PER_SECOND).coerceAtLeast(1)
+                    val restartingWave = game.currentWave + 1
+                    Component
+                        .translatable("exservermod.waves.actionbar.recovery", secondsLeft, restartingWave)
+                        .withStyle(ChatFormatting.GOLD)
                 }
                 else -> return
             }

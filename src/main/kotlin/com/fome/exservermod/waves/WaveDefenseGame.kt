@@ -8,8 +8,16 @@ enum class WavePhase(
     IDLE("exservermod.waves.phase.idle"),
     COUNTDOWN("exservermod.waves.phase.countdown"),
     FIGHT("exservermod.waves.phase.fight"),
+    TRICK_OR_TREAT("exservermod.waves.phase.trick_or_treat"),
     INTERMISSION("exservermod.waves.phase.intermission"),
+    RECOVERY("exservermod.waves.phase.recovery"),
     VICTORY("exservermod.waves.phase.victory"),
+}
+
+enum class HalloweenChoice {
+    NONE,
+    TRICK,
+    TREAT,
 }
 
 enum class WaveMobRole {
@@ -45,6 +53,11 @@ sealed interface WaveTickResult {
         val wave: Int,
         val totalWaves: Int,
         val groups: List<WaveSpawnGroup>,
+        val isTrick: Boolean = false,
+    ) : WaveTickResult
+
+    data class TrickWaveCleared(
+        val skippedToWave: Int,
     ) : WaveTickResult
 
     data object Victory : WaveTickResult
@@ -62,9 +75,13 @@ class WaveDefenseGame {
         const val COUNTDOWN_SECONDS = 15
         const val INTERMISSION_SECONDS = 15
         const val VICTORY_SECONDS = 20
+        const val TRICK_OR_TREAT_SECONDS = 30
+        const val RECOVERY_SECONDS = 60
         const val COUNTDOWN_TICKS = COUNTDOWN_SECONDS * TICKS_PER_SECOND
         const val INTERMISSION_TICKS = INTERMISSION_SECONDS * TICKS_PER_SECOND
         const val VICTORY_TICKS = VICTORY_SECONDS * TICKS_PER_SECOND
+        const val TRICK_OR_TREAT_TICKS = TRICK_OR_TREAT_SECONDS * TICKS_PER_SECOND
+        const val RECOVERY_TICKS = RECOVERY_SECONDS * TICKS_PER_SECOND
         const val TOTAL_WAVES = 11
 
         /**
@@ -179,6 +196,18 @@ class WaveDefenseGame {
     var kills: Int = 0
         private set
 
+    var isTrickWave: Boolean = false
+        private set
+
+    var willSaveCheckpointOnDeath: Boolean = false
+        private set
+
+    var hasSecondChanceToken: Boolean = false
+        private set
+
+    var halloweenChoice: HalloweenChoice = HalloweenChoice.NONE
+        private set
+
     val defenders: MutableSet<UUID> = mutableSetOf()
 
     fun start(defenderUuids: List<UUID>): Boolean {
@@ -189,6 +218,10 @@ class WaveDefenseGame {
         defenders.addAll(defenderUuids)
         currentWave = 0
         kills = 0
+        isTrickWave = false
+        willSaveCheckpointOnDeath = false
+        hasSecondChanceToken = false
+        halloweenChoice = HalloweenChoice.NONE
         remainingTicks = COUNTDOWN_TICKS
         phase = WavePhase.COUNTDOWN
         return true
@@ -198,22 +231,79 @@ class WaveDefenseGame {
 
     fun isFighting(): Boolean = phase == WavePhase.FIGHT
 
+    fun chooseTrick(): Boolean {
+        if (phase != WavePhase.TRICK_OR_TREAT) return false
+        halloweenChoice = HalloweenChoice.TRICK
+        isTrickWave = true
+        willSaveCheckpointOnDeath = false
+        hasSecondChanceToken = false
+        phase = WavePhase.INTERMISSION
+        remainingTicks = INTERMISSION_TICKS
+        return true
+    }
+
+    fun chooseTreat(checkpointWave: Int?): Boolean {
+        if (phase != WavePhase.TRICK_OR_TREAT) return false
+        halloweenChoice = HalloweenChoice.TREAT
+        isTrickWave = false
+        hasSecondChanceToken = false
+        if (checkpointWave != null && checkpointWave in 2..TOTAL_WAVES) {
+            currentWave = checkpointWave - 1
+            willSaveCheckpointOnDeath = false
+        } else {
+            willSaveCheckpointOnDeath = true
+        }
+        phase = WavePhase.INTERMISSION
+        remainingTicks = INTERMISSION_TICKS
+        return true
+    }
+
+    fun triggerSecondChanceRecovery(): Boolean {
+        if (!hasSecondChanceToken || phase != WavePhase.FIGHT) {
+            return false
+        }
+        hasSecondChanceToken = false
+        currentWave = (currentWave - 1).coerceAtLeast(0)
+        phase = WavePhase.RECOVERY
+        remainingTicks = RECOVERY_TICKS
+        return true
+    }
+
     /**
      * Called by the manager when every mob of the current wave is dead.
-     * Advances to VICTORY on wave 11, otherwise starts INTERMISSION.
+     * Advances to VICTORY on wave 11, otherwise starts TRICK_OR_TREAT after wave 1,
+     * skips waves 3 and 4 if trick wave 2 was cleared, or starts INTERMISSION.
      */
     fun onWaveCleared(): WaveTickResult {
         if (phase != WavePhase.FIGHT) {
             return WaveTickResult.None
         }
-        return if (currentWave >= TOTAL_WAVES) {
-            finishVictory()
-        } else {
+
+        if (isTrickWave && currentWave == 2) {
+            isTrickWave = false
+            hasSecondChanceToken = true
+            currentWave = 4
             val oldPhase = phase
             phase = WavePhase.INTERMISSION
             remainingTicks = INTERMISSION_TICKS
-            WaveTickResult.PhaseChanged(oldPhase, WavePhase.INTERMISSION)
+            return WaveTickResult.TrickWaveCleared(skippedToWave = 5)
         }
+
+        if (currentWave >= TOTAL_WAVES) {
+            return finishVictory()
+        }
+
+        if (currentWave == 1 && halloweenChoice == HalloweenChoice.NONE) {
+            val oldPhase = phase
+            phase = WavePhase.TRICK_OR_TREAT
+            remainingTicks = TRICK_OR_TREAT_TICKS
+            return WaveTickResult.PhaseChanged(oldPhase, WavePhase.TRICK_OR_TREAT)
+        }
+
+        val oldPhase = phase
+        phase = WavePhase.INTERMISSION
+        remainingTicks = INTERMISSION_TICKS
+        return WaveTickResult.PhaseChanged(oldPhase, WavePhase.INTERMISSION)
     }
 
     fun stop() {
@@ -221,6 +311,10 @@ class WaveDefenseGame {
         remainingTicks = 0
         currentWave = 0
         kills = 0
+        isTrickWave = false
+        willSaveCheckpointOnDeath = false
+        hasSecondChanceToken = false
+        halloweenChoice = HalloweenChoice.NONE
         defenders.clear()
     }
 
@@ -234,7 +328,27 @@ class WaveDefenseGame {
                     WaveTickResult.None
                 }
             }
+            WavePhase.TRICK_OR_TREAT -> {
+                remainingTicks--
+                if (remainingTicks <= 0) {
+                    halloweenChoice = HalloweenChoice.NONE
+                    val oldPhase = phase
+                    phase = WavePhase.INTERMISSION
+                    remainingTicks = INTERMISSION_TICKS
+                    WaveTickResult.PhaseChanged(oldPhase, WavePhase.INTERMISSION)
+                } else {
+                    WaveTickResult.None
+                }
+            }
             WavePhase.INTERMISSION -> {
+                remainingTicks--
+                if (remainingTicks <= 0) {
+                    beginWave()
+                } else {
+                    WaveTickResult.None
+                }
+            }
+            WavePhase.RECOVERY -> {
                 remainingTicks--
                 if (remainingTicks <= 0) {
                     beginWave()
@@ -258,7 +372,13 @@ class WaveDefenseGame {
 
     private fun beginWave(): WaveTickResult {
         val nextWave = currentWave + 1
-        val groups = buildWave(nextWave)
+        val isTrick = isTrickWave && nextWave == 2
+        val groups =
+            if (isTrick) {
+                buildWave(6)
+            } else {
+                buildWave(nextWave)
+            }
         if (groups.isEmpty()) {
             currentWave = nextWave
             return finishVictory()
@@ -267,7 +387,7 @@ class WaveDefenseGame {
         currentWave = nextWave
         phase = WavePhase.FIGHT
 
-        return WaveTickResult.WaveStarted(nextWave, TOTAL_WAVES, groups)
+        return WaveTickResult.WaveStarted(nextWave, TOTAL_WAVES, groups, isTrick = isTrick)
     }
 
     fun finishVictory(): WaveTickResult {
