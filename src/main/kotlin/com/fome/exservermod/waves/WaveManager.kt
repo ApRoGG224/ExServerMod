@@ -1,5 +1,6 @@
 package com.fome.exservermod.waves
 
+import com.fome.exservermod.island.NightmareIslandManager
 import com.fome.exservermod.mixin.CreeperAccessor
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -46,6 +47,8 @@ import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.ai.attributes.Attributes
+import net.minecraft.world.entity.ai.behavior.warden.SonicBoom
+import net.minecraft.world.entity.ai.memory.MemoryModuleType
 import net.minecraft.world.entity.monster.Blaze
 import net.minecraft.world.entity.monster.Creeper
 import net.minecraft.world.entity.monster.Witch
@@ -56,6 +59,7 @@ import net.minecraft.world.entity.monster.piglin.PiglinBrute
 import net.minecraft.world.entity.monster.skeleton.AbstractSkeleton
 import net.minecraft.world.entity.monster.skeleton.WitherSkeleton
 import net.minecraft.world.entity.monster.warden.Warden
+import net.minecraft.world.entity.monster.warden.WardenAi
 import net.minecraft.world.entity.monster.zombie.Zombie
 import net.minecraft.world.entity.projectile.EvokerFangs
 import net.minecraft.world.entity.projectile.FireworkRocketEntity
@@ -75,6 +79,10 @@ import net.minecraft.world.item.enchantment.Enchantment
 import net.minecraft.world.item.enchantment.Enchantments
 import net.minecraft.world.item.enchantment.Repairable
 import net.minecraft.world.item.equipment.Equippable
+import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.level.block.FenceBlock
+import net.minecraft.world.level.block.SlabBlock
+import net.minecraft.world.level.block.StairBlock
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
 import java.io.File
@@ -97,8 +105,8 @@ data class WaveCheckpointData(
  */
 class WaveManager {
     companion object {
-        const val SPAWN_RING_MIN = 12.0
-        const val SPAWN_RING_MAX = 22.0
+        const val SPAWN_RING_MIN = 14.0
+        const val SPAWN_RING_MAX = 45.0
         const val VICTORY_XP = 750
         const val CLEANUP_CHECK_INTERVAL_TICKS = 20
         const val LOCATE_COOLDOWN_MS = 60_000L
@@ -918,6 +926,17 @@ class WaveManager {
         mob.health = 24.0f
     }
 
+    private fun configureWaveWarden(mob: Warden) {
+        mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 350.0 }
+        mob.health = 350.0f
+        mob.getAttribute(Attributes.ATTACK_DAMAGE)?.let { it.baseValue = 12.0 }
+        mob.getAttribute(Attributes.MOVEMENT_SPEED)?.let { it.baseValue = 0.30 }
+        mob.getAttribute(Attributes.FOLLOW_RANGE)?.let { it.baseValue = 128.0 }
+        mob.setPersistenceRequired()
+        WardenAi.setDigCooldown(mob)
+        SonicBoom.setCooldown(mob, 100_000)
+    }
+
     private fun enchantItem(
         level: ServerLevel,
         stack: ItemStack,
@@ -958,8 +977,7 @@ class WaveManager {
 
         // Warden anger & durability
         if (mob is Warden) {
-            mob.getAttribute(Attributes.MAX_HEALTH)?.let { it.baseValue = 500.0 }
-            mob.health = 500.0f
+            configureWaveWarden(mob)
             return
         }
 
@@ -1168,6 +1186,22 @@ class WaveManager {
         if (server.tickCount % 20 == 0) {
             for (uuid in trackedMobs) {
                 val mob = level.getEntity(uuid) as? Mob ?: continue
+                if (mob is Warden && mob.isAlive) {
+                    WardenAi.setDigCooldown(mob)
+                    SonicBoom.setCooldown(mob, 100_000)
+                    val nearest =
+                        defenders
+                            .filter { it.level().dimension() == mob.level().dimension() }
+                            .minByOrNull { it.distanceToSqr(mob.x, mob.y, mob.z) }
+                    if (nearest != null) {
+                        mob.target = nearest
+                        mob.setAttackTarget(nearest)
+                        mob.brain.eraseMemory(MemoryModuleType.ROAR_TARGET)
+                        mob.brain.setMemory(MemoryModuleType.ATTACK_TARGET, nearest)
+                        mob.navigation.moveTo(nearest, 1.25)
+                    }
+                    continue
+                }
                 if (mob.isAlive && (mob.target == null || !mob.target!!.isAlive)) {
                     val nearest =
                         defenders
@@ -1175,9 +1209,6 @@ class WaveManager {
                             .minByOrNull { it.distanceToSqr(mob.x, mob.y, mob.z) }
                     if (nearest != null) {
                         mob.target = nearest
-                        if (mob is Warden) {
-                            mob.increaseAngerAt(nearest, 150, true)
-                        }
                     }
                 }
             }
@@ -1467,11 +1498,15 @@ class WaveManager {
         level: ServerLevel,
         center: Vec3,
     ): BlockPos? {
-        repeat(32) {
+        repeat(40) {
             val angle = Random.nextDouble(0.0, 2.0 * Math.PI)
             val dist = Random.nextDouble(SPAWN_RING_MIN, SPAWN_RING_MAX)
             val x = (center.x + dist * cos(angle)).toInt()
             val z = (center.z + dist * sin(angle)).toInt()
+
+            if (!NightmareIslandManager.isLocationOnIsland(x.toDouble(), z.toDouble())) {
+                return@repeat
+            }
 
             val surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)
             val pos = BlockPos(x, surfaceY, z)
@@ -1487,10 +1522,31 @@ class WaveManager {
         level: ServerLevel,
         pos: BlockPos,
     ): Boolean {
-        val floor = level.getBlockState(pos.below())
-        return floor.isFaceSturdy(level, pos.below(), Direction.UP) &&
-            level.getBlockState(pos).isAir &&
-            level.getBlockState(pos.above()).isAir
+        // Island ground height guard: natural island ground is Y 60..76. High house roofs are Y 78+
+        if (pos.y !in 60..76) return false
+
+        val floorPos = pos.below()
+        val floor = level.getBlockState(floorPos)
+
+        if (!floor.isFaceSturdy(level, floorPos, Direction.UP)) return false
+        if (!level.getFluidState(floorPos).isEmpty || !level.getFluidState(pos).isEmpty) return false
+
+        val floorBlock = floor.block
+        if (floorBlock is StairBlock || floorBlock is SlabBlock || floorBlock is FenceBlock) return false
+
+        // Strict natural island ground: podzol, granite, dirt, coarse dirt, grass block, stone
+        val isNaturalGround =
+            floorBlock == Blocks.PODZOL ||
+                floorBlock == Blocks.GRANITE ||
+                floorBlock == Blocks.DIRT ||
+                floorBlock == Blocks.COARSE_DIRT ||
+                floorBlock == Blocks.GRASS_BLOCK ||
+                floorBlock == Blocks.ROOTED_DIRT ||
+                floorBlock == Blocks.STONE
+
+        if (!isNaturalGround) return false
+
+        return level.getBlockState(pos).isAir && level.getBlockState(pos.above()).isAir
     }
 
     private fun onWaveCleared(server: MinecraftServer) {

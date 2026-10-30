@@ -5,6 +5,7 @@ import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.game.GameCommands
 import com.fome.exservermod.game.GameEventHandler
 import com.fome.exservermod.game.HideAndSeekGame
+import com.fome.exservermod.island.NightmareIslandManager
 import com.fome.exservermod.landmarks.LandmarkCommands
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.CloseRoulettePayload
@@ -16,8 +17,11 @@ import com.fome.exservermod.sound.ModSounds
 import com.fome.exservermod.waves.WaveCommands
 import com.fome.exservermod.waves.WaveManager
 import net.fabricmc.api.ModInitializer
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.world.level.Level
 import org.slf4j.LoggerFactory
 
 object ExServerMod : ModInitializer {
@@ -37,6 +41,7 @@ object ExServerMod : ModInitializer {
     }
 
     val waveManager = WaveManager()
+    val islandManager = NightmareIslandManager()
 
     override fun onInitialize() {
         logger.info("[ExServerMod] Initializing server mod.")
@@ -56,6 +61,20 @@ object ExServerMod : ModInitializer {
         WaveCommands(landmarkManager).register()
         waveManager.register()
 
-        logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot control, and wave defense initialized.")
+        ServerTickEvents.END_SERVER_TICK.register { server ->
+            val overworld = server.getLevel(Level.OVERWORLD)
+            if (overworld != null) {
+                islandManager.tick(overworld)
+            }
+        }
+
+        ServerLifecycleEvents.SERVER_STOPPING.register { server ->
+            val overworld = server.getLevel(Level.OVERWORLD)
+            if (overworld != null) {
+                islandManager.clearAll(overworld)
+            }
+        }
+
+        logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot control, wave defense, and Nightmare Island initialized.")
     }
 }

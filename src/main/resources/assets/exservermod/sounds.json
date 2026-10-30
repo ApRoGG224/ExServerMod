@@ -7,5 +7,32 @@
         "stream": true
       }
     ]
+  },
+  "lullaby_ambient": {
+    "category": "music",
+    "sounds": [
+      {
+        "name": "exservermod:lullaby_ambient",
+        "stream": true
+      }
+    ]
+  },
+  "lullaby_intro_30s": {
+    "category": "music",
+    "sounds": [
+      {
+        "name": "exservermod:lullaby_intro_30s",
+        "stream": true
+      }
+    ]
+  },
+  "lullaby_combat_drop": {
+    "category": "music",
+    "sounds": [
+      {
+        "name": "exservermod:lullaby_combat_drop",
+        "stream": true
+      }
+    ]
   }
 }
