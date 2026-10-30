@@ -15,6 +15,7 @@ import com.fome.exservermod.halloween.network.MerchantBuyPayload
 import com.fome.exservermod.halloween.network.OpenGhostNamingPayload
 import com.fome.exservermod.halloween.network.OpenMerchantGuiPayload
 import com.fome.exservermod.halloween.network.SubmitGhostNamePayload
+import com.fome.exservermod.island.NightmareIslandManager
 import com.fome.exservermod.landmarks.LandmarkCommands
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.CloseRoulettePayload
@@ -26,8 +27,11 @@ import com.fome.exservermod.sound.ModSounds
 import com.fome.exservermod.waves.WaveCommands
 import com.fome.exservermod.waves.WaveManager
 import net.fabricmc.api.ModInitializer
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.world.level.Level
 import org.slf4j.LoggerFactory
 
 object ExServerMod : ModInitializer {
@@ -47,6 +51,7 @@ object ExServerMod : ModInitializer {
     }
 
     val waveManager = WaveManager()
+    val islandManager = NightmareIslandManager()
 
     val halloweenEvent by lazy {
         val configDir = FabricLoader.getInstance().configDir.resolve("exservermod")
@@ -87,6 +92,23 @@ object ExServerMod : ModInitializer {
         halloweenEvent.register()
         HalloweenCommands(halloweenEvent).register()
 
-        logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot, wave defense, and Halloween event initialized.")
+        ServerTickEvents.END_SERVER_TICK.register { server ->
+            val overworld = server.getLevel(Level.OVERWORLD)
+            if (overworld != null) {
+                islandManager.tick(overworld)
+            }
+        }
+
+        ServerLifecycleEvents.SERVER_STOPPING.register { server ->
+            val overworld = server.getLevel(Level.OVERWORLD)
+            if (overworld != null) {
+                islandManager.clearAll(overworld)
+            }
+        }
+
+        logger.info(
+            "[ExServerMod] Core game, disguise engine, landmarks, AFK bot control, wave defense, " +
+                "Nightmare Island, and Halloween event initialized.",
+        )
     }
 }

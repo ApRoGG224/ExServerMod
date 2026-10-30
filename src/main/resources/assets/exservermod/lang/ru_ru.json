@@ -181,6 +181,7 @@
   "exservermod.waves.button.stop.hover": "Остановить оборону и убрать всех мобов волны",
   "exservermod.waves.idle_intro": "[Волны] Оборона волн мобов — отбей 11 волн кошмарной орды!",
   "exservermod.waves.rules": "[Волны] Ноль урона миру: криперы создают облака, фаерболы не жгут блоки. Одна смерть любого игрока = конец всему!",
+  "exservermod.waves.error.island_only": "[Волны] Запустить волны кошмаров можно ТОЛЬКО на Острове кошмаров! [X: %d, Z: %d]",
   "exservermod.waves.error.hideandseek_running": "[Волны] Сначала закончите прятки!",
   "exservermod.waves.error.no_defenders": "[Волны] Нет защитников (АФК-бот не считается).",
   "exservermod.waves.error.already_running": "[Волны] Оборона уже идет! /waves stop чтобы остановить.",

@@ -12,7 +12,9 @@
     "ServerPlayerDropMixin",
     "SlotContainerMixin",
     "SmallFireballMixin",
-    "WalkAnimationStateAccessor"
+    "SonicBoomMixin",
+    "WalkAnimationStateAccessor",
+    "WardenMixin"
   ],
   "client": [
     "AvatarRendererMixin",

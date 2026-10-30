@@ -4,6 +4,7 @@ import com.fome.exservermod.ExServerMod
 import com.fome.exservermod.afk.AfkManager
 import com.fome.exservermod.game.GamePhase
 import com.fome.exservermod.game.RouletteManager
+import com.fome.exservermod.island.NightmareIslandManager
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
@@ -14,6 +15,7 @@ import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.level.Level
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
 
@@ -211,6 +213,22 @@ class WaveCommands(
         var displayArenaName: String? = null
 
         val level = player.level()
+
+        // Wave defense is restricted exclusively to Nightmare Island
+        if (level.dimension() != Level.OVERWORLD ||
+            !NightmareIslandManager.isLocationOnIsland(player.x, player.z)
+        ) {
+            player.sendSystemMessage(
+                Component
+                    .translatable(
+                        "exservermod.waves.error.island_only",
+                        NightmareIslandManager.ISLAND_CENTER_X.toInt(),
+                        NightmareIslandManager.ISLAND_CENTER_Z.toInt(),
+                    ).withStyle(ChatFormatting.RED),
+            )
+            return
+        }
+
         if (landmarkName != null) {
             val clean = landmarkName.trim().removeSurrounding("\"")
             val lm = landmarkManager.getLandmark(clean)
@@ -225,17 +243,15 @@ class WaveCommands(
             arenaPos = Vec3(lm.x, y, lm.z)
             displayArenaName = lm.name
         } else {
-            // Check for pre-built arena landmarks if no argument was passed
-            val defaultLm =
-                landmarkManager.getLandmark("mansion")
-                    ?: landmarkManager.getLandmark("arena")
-                    ?: landmarkManager.getLandmark("horde")
-            if (defaultLm != null) {
-                val surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, defaultLm.x.toInt(), defaultLm.z.toInt())
-                val y = if (surfaceY > level.minY) surfaceY.toDouble() else player.y
-                arenaPos = Vec3(defaultLm.x, y, defaultLm.z)
-                displayArenaName = defaultLm.name
-            }
+            // Default directly to Nightmare Island center arena
+            val surfaceY =
+                level.getHeight(
+                    Heightmap.Types.MOTION_BLOCKING,
+                    NightmareIslandManager.ISLAND_CENTER_X.toInt(),
+                    NightmareIslandManager.ISLAND_CENTER_Z.toInt(),
+                )
+            val y = if (surfaceY in 60..78) surfaceY.toDouble() else NightmareIslandManager.ISLAND_CENTER_Y
+            arenaPos = Vec3(NightmareIslandManager.ISLAND_CENTER_X, y, NightmareIslandManager.ISLAND_CENTER_Z)
         }
 
         if (!ExServerMod.waveManager.tryStart(player, defenders, arenaPos)) {
