@@ -26,7 +26,6 @@ class HalloweenCommands(
                     }.then(
                         Commands
                             .literal("start")
-                            .requires { it.player?.let { p -> it.server.playerList.isOp(p.nameAndId()) } ?: true }
                             .executes { ctx ->
                                 val server = ctx.source.server
                                 event.startEvent(server)
@@ -35,10 +34,37 @@ class HalloweenCommands(
                     ).then(
                         Commands
                             .literal("stop")
-                            .requires { it.player?.let { p -> it.server.playerList.isOp(p.nameAndId()) } ?: true }
                             .executes { ctx ->
                                 val server = ctx.source.server
                                 event.endEvent(server)
+                                1
+                            },
+                    ).then(
+                        Commands
+                            .literal("skip")
+                            .executes { ctx ->
+                                val server = ctx.source.server
+                                if (event.phase == HalloweenPhase.ACTIVE_GATHERING) {
+                                    event.skipGathering(server)
+                                    ctx.source.sendSystemMessage(
+                                        Component.translatable("exservermod.halloween.skipped").withStyle(ChatFormatting.YELLOW),
+                                    )
+                                } else {
+                                    ctx.source.sendSystemMessage(Component.literal("§cСбор конфет сейчас не идет!"))
+                                }
+                                1
+                            },
+                    ).then(
+                        Commands
+                            .literal("spawnmerchant")
+                            .executes { ctx ->
+                                val server = ctx.source.server
+                                val player = ctx.source.player
+                                if (player != null) {
+                                    event.spawnMerchantInFrontOf(server, player)
+                                } else {
+                                    ctx.source.sendSystemMessage(Component.literal("§cКоманду может выполнять только игрок!"))
+                                }
                                 1
                             },
                     ).then(
@@ -66,8 +92,28 @@ class HalloweenCommands(
                     ).then(
                         Commands
                             .literal("givecandy")
-                            .requires { it.player?.let { p -> it.server.playerList.isOp(p.nameAndId()) } ?: true }
                             .then(
+                                Commands
+                                    .argument("amount", IntegerArgumentType.integer(1))
+                                    .executes { ctx ->
+                                        val player = ctx.source.player
+                                        val amount = IntegerArgumentType.getInteger(ctx, "amount")
+                                        if (player != null) {
+                                            val newBal = HalloweenEvent.balanceManager?.addCandies(player, amount) ?: 0
+                                            ctx.source.sendSystemMessage(
+                                                Component.translatable(
+                                                    "exservermod.halloween.command.given",
+                                                    amount,
+                                                    player.name.string,
+                                                    newBal,
+                                                ),
+                                            )
+                                        } else {
+                                            ctx.source.sendSystemMessage(Component.literal("§cУкажите целевого игрока!"))
+                                        }
+                                        1
+                                    },
+                            ).then(
                                 Commands
                                     .argument("player", EntityArgument.player())
                                     .then(

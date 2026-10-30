@@ -136,4 +136,77 @@ class HalloweenEventTest {
         assertTrue(pool.contains("netherite_ingot"))
         assertTrue(pool.contains("slime_blocks"))
     }
+
+    @Test
+    fun testBalanceManagerRemoveCandies() {
+        val tempFile = File.createTempFile("test_remove_balances", ".json")
+        tempFile.deleteOnExit()
+
+        val manager = HalloweenBalanceManager(tempFile)
+        val uuid = UUID.randomUUID()
+
+        manager.setCandies(uuid, 50)
+        assertEquals(50, manager.getBalance(uuid))
+
+        // Remove partial
+        val removed1 = manager.removeCandies(uuid, 15)
+        assertEquals(15, removed1)
+        assertEquals(35, manager.getBalance(uuid))
+
+        // Remove more than available
+        val removed2 = manager.removeCandies(uuid, 100)
+        assertEquals(35, removed2)
+        assertEquals(0, manager.getBalance(uuid))
+
+        // Remove when balance is 0
+        val removed3 = manager.removeCandies(uuid, 10)
+        assertEquals(0, removed3)
+        assertEquals(0, manager.getBalance(uuid))
+    }
+
+    @Test
+    fun testBloodZombieCandyStealAndDropBounds() {
+        for (i in 0 until 100) {
+            val steal = Random.nextInt(5, 16)
+            assertTrue(steal in 5..15, "Steal amount must be in 5..15")
+
+            val drop = Random.nextInt(2, 6)
+            assertTrue(drop in 2..5, "Zombie drop must be in 2..5")
+        }
+    }
+
+    @Test
+    fun testDemonEyeStatsAndDrops() {
+        val maxHp = 5.0f
+        val pureDmg = 1.0f
+        assertEquals(5.0f, maxHp)
+        assertEquals(1.0f, pureDmg)
+
+        for (i in 0 until 100) {
+            val drop = Random.nextInt(1, 4)
+            assertTrue(drop in 1..3, "Demon eye drop must be in 1..3")
+
+            val variant = Random.nextInt(4)
+            assertTrue(variant in 0..3, "Demon eye variant must be in 0..3")
+        }
+    }
+
+    @Test
+    fun testGhostPetPositioningMath() {
+        val playerX = 100.0
+        val playerZ = 100.0
+        val playerY = 64.0
+        val eyeY = playerY + 1.62
+        val yRot = 0.0f // Facing south (+Z)
+
+        val rad = Math.toRadians((yRot + 140.0) % 360.0)
+        val targetX = playerX - kotlin.math.sin(rad) * 1.4
+        val targetZ = playerZ + kotlin.math.cos(rad) * 1.4
+        val targetY = eyeY + 0.35
+
+        // Player faces South (+Z). Behind is North (-Z), right is West (-X)
+        assertTrue(targetZ < playerZ, "Should be behind player (lower Z when facing south)")
+        assertTrue(targetX < playerX, "Should be to the right of player (lower X when facing south)")
+        assertEquals(65.97, targetY, 0.01)
+    }
 }

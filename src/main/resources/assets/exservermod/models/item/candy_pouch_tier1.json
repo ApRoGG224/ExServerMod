@@ -1,6 +1,192 @@
 {
-  "parent": "minecraft:item/generated",
+  "credit": "ExServerMod - Tier 1 Spooky Pouch",
   "textures": {
-    "layer0": "minecraft:item/bundle"
+    "particle": "minecraft:block/carved_pumpkin",
+    "bottom": "minecraft:block/carved_pumpkin",
+    "wall": "minecraft:block/pumpkin_side",
+    "handle": "minecraft:block/end_rod",
+    "candy1": "minecraft:block/jack_o_lantern",
+    "candy2": "minecraft:block/purpur_block",
+    "candy3": "minecraft:block/gold_block"
+  },
+  "elements": [
+    {
+      "name": "bottom",
+      "from": [4, 0, 4],
+      "to": [12, 1, 12],
+      "faces": {
+        "north": {"uv": [4, 15, 12, 16], "texture": "#bottom"},
+        "east": {"uv": [4, 15, 12, 16], "texture": "#bottom"},
+        "south": {"uv": [4, 15, 12, 16], "texture": "#bottom"},
+        "west": {"uv": [4, 15, 12, 16], "texture": "#bottom"},
+        "up": {"uv": [4, 4, 12, 12], "texture": "#bottom"},
+        "down": {"uv": [4, 4, 12, 12], "texture": "#bottom"}
+      }
+    },
+    {
+      "name": "wall_north",
+      "from": [4, 1, 4],
+      "to": [12, 6, 5],
+      "faces": {
+        "north": {"uv": [4, 8, 12, 13], "texture": "#wall"},
+        "east": {"uv": [4, 8, 5, 13], "texture": "#wall"},
+        "south": {"uv": [4, 8, 12, 13], "texture": "#wall"},
+        "west": {"uv": [11, 8, 12, 13], "texture": "#wall"},
+        "up": {"uv": [4, 4, 12, 5], "texture": "#wall"},
+        "down": {"uv": [4, 4, 12, 5], "texture": "#wall"}
+      }
+    },
+    {
+      "name": "wall_south",
+      "from": [4, 1, 11],
+      "to": [12, 6, 12],
+      "faces": {
+        "north": {"uv": [4, 8, 12, 13], "texture": "#wall"},
+        "east": {"uv": [11, 8, 12, 13], "texture": "#wall"},
+        "south": {"uv": [4, 8, 12, 13], "texture": "#wall"},
+        "west": {"uv": [4, 8, 5, 13], "texture": "#wall"},
+        "up": {"uv": [4, 11, 12, 12], "texture": "#wall"},
+        "down": {"uv": [4, 11, 12, 12], "texture": "#wall"}
+      }
+    },
+    {
+      "name": "wall_west",
+      "from": [4, 1, 5],
+      "to": [5, 6, 11],
+      "faces": {
+        "north": {"uv": [4, 8, 5, 13], "texture": "#wall"},
+        "east": {"uv": [5, 8, 11, 13], "texture": "#wall"},
+        "south": {"uv": [11, 8, 12, 13], "texture": "#wall"},
+        "west": {"uv": [5, 8, 11, 13], "texture": "#wall"},
+        "up": {"uv": [4, 5, 5, 11], "texture": "#wall"},
+        "down": {"uv": [4, 5, 5, 11], "texture": "#wall"}
+      }
+    },
+    {
+      "name": "wall_east",
+      "from": [11, 1, 5],
+      "to": [12, 6, 11],
+      "faces": {
+        "north": {"uv": [11, 8, 12, 13], "texture": "#wall"},
+        "east": {"uv": [5, 8, 11, 13], "texture": "#wall"},
+        "south": {"uv": [4, 8, 5, 13], "texture": "#wall"},
+        "west": {"uv": [5, 8, 11, 13], "texture": "#wall"},
+        "up": {"uv": [11, 5, 12, 11], "texture": "#wall"},
+        "down": {"uv": [11, 5, 12, 11], "texture": "#wall"}
+      }
+    },
+    {
+      "name": "handle_left",
+      "from": [4, 6, 7.5],
+      "to": [5, 11, 8.5],
+      "faces": {
+        "north": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "east": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "south": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "west": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "up": {"uv": [7, 7, 8, 8], "texture": "#handle"}
+      }
+    },
+    {
+      "name": "handle_right",
+      "from": [11, 6, 7.5],
+      "to": [12, 11, 8.5],
+      "faces": {
+        "north": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "east": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "south": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "west": {"uv": [7, 5, 8, 10], "texture": "#handle"},
+        "up": {"uv": [7, 7, 8, 8], "texture": "#handle"}
+      }
+    },
+    {
+      "name": "handle_top",
+      "from": [4, 10, 7.5],
+      "to": [12, 11, 8.5],
+      "faces": {
+        "north": {"uv": [4, 7, 12, 8], "texture": "#handle"},
+        "south": {"uv": [4, 7, 12, 8], "texture": "#handle"},
+        "up": {"uv": [4, 7, 12, 8], "texture": "#handle"},
+        "down": {"uv": [4, 7, 12, 8], "texture": "#handle"}
+      }
+    },
+    {
+      "name": "candy_1",
+      "from": [5.5, 1, 5.5],
+      "to": [8.5, 3.5, 8.5],
+      "faces": {
+        "north": {"uv": [2, 2, 5, 5], "texture": "#candy1"},
+        "east": {"uv": [2, 2, 5, 5], "texture": "#candy1"},
+        "south": {"uv": [2, 2, 5, 5], "texture": "#candy1"},
+        "west": {"uv": [2, 2, 5, 5], "texture": "#candy1"},
+        "up": {"uv": [2, 2, 5, 5], "texture": "#candy1"}
+      }
+    },
+    {
+      "name": "candy_2",
+      "from": [8, 1, 6.5],
+      "to": [10.5, 4, 9.5],
+      "faces": {
+        "north": {"uv": [4, 4, 7, 7], "texture": "#candy2"},
+        "east": {"uv": [4, 4, 7, 7], "texture": "#candy2"},
+        "south": {"uv": [4, 4, 7, 7], "texture": "#candy2"},
+        "west": {"uv": [4, 4, 7, 7], "texture": "#candy2"},
+        "up": {"uv": [4, 4, 7, 7], "texture": "#candy2"}
+      }
+    },
+    {
+      "name": "candy_3",
+      "from": [6, 2, 8.5],
+      "to": [9.5, 4.5, 11],
+      "faces": {
+        "north": {"uv": [1, 1, 5, 4], "texture": "#candy3"},
+        "east": {"uv": [1, 1, 5, 4], "texture": "#candy3"},
+        "south": {"uv": [1, 1, 5, 4], "texture": "#candy3"},
+        "west": {"uv": [1, 1, 5, 4], "texture": "#candy3"},
+        "up": {"uv": [1, 1, 5, 4], "texture": "#candy3"}
+      }
+    }
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [0, -90, 55],
+      "translation": [0, 1.5, -0.5],
+      "scale": [0.75, 0.75, 0.75]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [0, 90, -55],
+      "translation": [0, 1.5, -0.5],
+      "scale": [0.75, 0.75, 0.75]
+    },
+    "firstperson_righthand": {
+      "rotation": [0, -90, 25],
+      "translation": [1.13, 3.2, 1.13],
+      "scale": [0.68, 0.68, 0.68]
+    },
+    "firstperson_lefthand": {
+      "rotation": [0, 90, -25],
+      "translation": [1.13, 3.2, 1.13],
+      "scale": [0.68, 0.68, 0.68]
+    },
+    "ground": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 3, 0],
+      "scale": [0.7, 0.7, 0.7]
+    },
+    "gui": {
+      "rotation": [30, 225, 0],
+      "translation": [0, 1.5, 0],
+      "scale": [0.95, 0.95, 0.95]
+    },
+    "head": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 13.0, 0],
+      "scale": [1, 1, 1]
+    },
+    "fixed": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.8, 0.8, 0.8]
+    }
   }
 }

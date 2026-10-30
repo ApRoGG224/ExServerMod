@@ -68,6 +68,41 @@ class HalloweenBalanceManager(
         return success
     }
 
+    fun removeCandies(
+        player: ServerPlayer,
+        amount: Int,
+    ): Int {
+        if (amount <= 0) return 0
+        var removed = 0
+        balances.compute(player.uuid) { _, current ->
+            val bal = current ?: 0
+            removed = minOf(amount, bal)
+            (bal - removed).coerceAtLeast(0)
+        }
+        if (removed > 0) {
+            save()
+            sendBalanceActionBar(player, getBalance(player.uuid))
+        }
+        return removed
+    }
+
+    fun removeCandies(
+        uuid: UUID,
+        amount: Int,
+    ): Int {
+        if (amount <= 0) return 0
+        var removed = 0
+        balances.compute(uuid) { _, current ->
+            val bal = current ?: 0
+            removed = minOf(amount, bal)
+            (bal - removed).coerceAtLeast(0)
+        }
+        if (removed > 0) {
+            save()
+        }
+        return removed
+    }
+
     fun setCandies(
         uuid: UUID,
         amount: Int,

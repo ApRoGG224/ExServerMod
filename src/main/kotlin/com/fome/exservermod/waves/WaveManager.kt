@@ -499,16 +499,6 @@ class WaveManager {
                             ).withStyle(ChatFormatting.GOLD),
                         true,
                     )
-                    killer.level().playSound(
-                        null,
-                        killer.x,
-                        killer.y,
-                        killer.z,
-                        SoundEvents.EXPERIENCE_ORB_PICKUP,
-                        SoundSource.PLAYERS,
-                        1.0f,
-                        if (isBossOrChamp) 0.8f else 1.5f,
-                    )
                     val sLevel = entity.level() as? ServerLevel
                     sLevel?.sendParticles(
                         ParticleTypes.HAPPY_VILLAGER,

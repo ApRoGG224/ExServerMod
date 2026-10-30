@@ -1,7 +1,10 @@
 package com.fome.exservermod.client
 
 import com.fome.exservermod.halloween.HalloweenEntities
+import com.fome.exservermod.halloween.client.BloodZombieRenderer
 import com.fome.exservermod.halloween.client.CandyEntityRenderer
+import com.fome.exservermod.halloween.client.DemonEyeModel
+import com.fome.exservermod.halloween.client.DemonEyeRenderer
 import com.fome.exservermod.halloween.client.GhostNamingScreen
 import com.fome.exservermod.halloween.client.GhostPetModel
 import com.fome.exservermod.halloween.client.GhostPetRenderer
@@ -77,10 +80,13 @@ class ExServerModClient : ClientModInitializer {
 
         // Halloween Entity Renderers & Models
         ModelLayerRegistry.registerModelLayer(GhostPetModel.LAYER_LOCATION) { GhostPetModel.createBodyLayer() }
+        ModelLayerRegistry.registerModelLayer(DemonEyeModel.LAYER_LOCATION) { DemonEyeModel.createBodyLayer() }
         EntityRendererRegistry.register(HalloweenEntities.CANDY) { ctx -> CandyEntityRenderer(ctx) }
         EntityRendererRegistry.register(HalloweenEntities.PUMPKIN_PROJECTILE) { ctx -> ThrownItemRenderer(ctx) }
         EntityRendererRegistry.register(HalloweenEntities.HALLOWEEN_MERCHANT) { ctx -> WanderingTraderRenderer(ctx) }
         EntityRendererRegistry.register(HalloweenEntities.GHOST_PET) { ctx -> GhostPetRenderer(ctx) }
+        EntityRendererRegistry.register(HalloweenEntities.BLOOD_ZOMBIE) { ctx -> BloodZombieRenderer(ctx) }
+        EntityRendererRegistry.register(HalloweenEntities.DEMON_EYE) { ctx -> DemonEyeRenderer(ctx) }
 
         // Channeling Detection (Holding Right Click on Candy)
         ClientTickEvents.END_CLIENT_TICK.register { client ->

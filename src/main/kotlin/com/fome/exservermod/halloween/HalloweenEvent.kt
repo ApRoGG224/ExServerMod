@@ -1,6 +1,8 @@
 package com.fome.exservermod.halloween
 
+import com.fome.exservermod.halloween.entity.BloodZombieEntity
 import com.fome.exservermod.halloween.entity.CandyEntity
+import com.fome.exservermod.halloween.entity.DemonEyeEntity
 import com.fome.exservermod.halloween.entity.GhostPetEntity
 import com.fome.exservermod.halloween.entity.HalloweenMerchantEntity
 import com.fome.exservermod.halloween.network.CandyChannelPayload
@@ -26,6 +28,7 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
 import net.minecraft.tags.BlockTags
+import net.minecraft.world.entity.Mob
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.world.item.component.FireworkExplosion
@@ -93,6 +96,7 @@ class HalloweenEvent(
     private var merchantSpawnTick: Int = 0
     private var spawnedMerchantUuid: UUID? = null
     private val spawnedCandies: MutableList<CandyEntity> = mutableListOf()
+    private val spawnedBloodMobs: MutableList<Mob> = mutableListOf()
     private val playerPets: MutableMap<UUID, UUID> = mutableMapOf()
 
     fun register() {
@@ -127,6 +131,8 @@ class HalloweenEvent(
                 HalloweenPhase.ACTIVE_GATHERING -> {
                     activeGatheringTicksLeft--
 
+                    maintainNightTime(server)
+
                     // Broadcast Action Bar HUD every second with time remaining
                     if (server.tickCount % 20 == 0) {
                         val timeLeft = formattedTimeLeft()
@@ -135,10 +141,16 @@ class HalloweenEvent(
                         }
                     }
 
+                    // Spawn blood mobs every 200 ticks (10s)
+                    if (server.tickCount % 200 == 0) {
+                        tickBloodMobSpawning(server)
+                    }
+
                     // Replenish candies near players and cleanup far candies every 100 ticks (5s)
                     if (server.tickCount % 100 == 0) {
                         spawnCandiesAroundPlayers(server)
                         cleanupFarCandies(server)
+                        cleanupFarBloodMobs(server)
                     }
 
                     // Check for merchant spawn between minute 2 and 8
@@ -185,8 +197,10 @@ class HalloweenEvent(
 
         // Clean any lingering entities
         clearCandies()
+        clearBloodMobs(server)
 
         val overworld = server.overworld()
+        setNightTime(server)
 
         // Sync blood sky to clients
         for (player in server.playerList.players) {
@@ -363,9 +377,69 @@ class HalloweenEvent(
         }
     }
 
+    fun skipGathering(server: MinecraftServer) {
+        if (phase == HalloweenPhase.ACTIVE_GATHERING) {
+            if (spawnedMerchantUuid == null) {
+                spawnMerchant(server)
+            }
+            endGathering(server)
+        }
+    }
+
+    fun spawnMerchantInFrontOf(
+        server: MinecraftServer,
+        player: ServerPlayer,
+    ) {
+        val overworld = server.overworld()
+        val look = player.lookAngle
+        val spawnX = player.x + look.x * 2.0
+        val spawnZ = player.z + look.z * 2.0
+        val groundY = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawnX.toInt(), spawnZ.toInt())
+        val candidatePos = BlockPos(spawnX.toInt(), groundY, spawnZ.toInt())
+
+        val oldMerchantUuid = spawnedMerchantUuid
+        if (oldMerchantUuid != null) {
+            val oldMerchant = overworld.getEntity(oldMerchantUuid)
+            oldMerchant?.discard()
+        }
+
+        val merchant = HalloweenMerchantEntity(HalloweenEntities.HALLOWEEN_MERCHANT, overworld)
+        merchant.setPos(candidatePos.x + 0.5, candidatePos.y.toDouble(), candidatePos.z + 0.5)
+        overworld.addFreshEntity(merchant)
+        spawnedMerchantUuid = merchant.uuid
+
+        overworld.sendParticles(
+            ParticleTypes.HAPPY_VILLAGER,
+            merchant.x,
+            merchant.y + 1.0,
+            merchant.z,
+            15,
+            0.3,
+            0.5,
+            0.3,
+            0.1,
+        )
+
+        overworld.playSound(
+            null,
+            merchant.x,
+            merchant.y,
+            merchant.z,
+            SoundEvents.WANDERING_TRADER_YES,
+            SoundSource.NEUTRAL,
+            1.0f,
+            1.0f,
+        )
+
+        player.sendSystemMessage(
+            Component.translatable("exservermod.halloween.merchant_spawned_cmd").withStyle(ChatFormatting.LIGHT_PURPLE),
+        )
+    }
+
     private fun endGathering(server: MinecraftServer) {
         phase = HalloweenPhase.MERCHANT_ONLY
         clearCandies()
+        clearBloodMobs(server)
 
         // Turn off blood sky
         for (player in server.playerList.players) {
@@ -382,6 +456,7 @@ class HalloweenEvent(
         phase = HalloweenPhase.IDLE
         ticksUntilNextEvent = config.eventCooldownSeconds * 20
         clearCandies()
+        clearBloodMobs(server)
 
         // Despawn merchant
         val merchantUuid = spawnedMerchantUuid
@@ -424,6 +499,119 @@ class HalloweenEvent(
             }
         }
         spawnedCandies.clear()
+    }
+
+    private fun tickBloodMobSpawning(server: MinecraftServer) {
+        val overworld = server.overworld()
+        val players = overworld.players()
+        if (players.isEmpty()) return
+
+        spawnedBloodMobs.removeAll { !it.isAlive }
+
+        for (player in players) {
+            val playerPos = player.position()
+            val nearbyCount = spawnedBloodMobs.count { it.isAlive && it.position().distanceTo(playerPos) <= 40.0 }
+            if (nearbyCount >= 4) continue
+
+            val toSpawn = Random.nextInt(1, 3).coerceAtMost(4 - nearbyCount)
+            for (i in 0 until toSpawn) {
+                val angle = Random.nextDouble(0.0, 2 * Math.PI)
+                val dist = Random.nextDouble(14.0, 28.0)
+                val spawnX = player.x + cos(angle) * dist
+                val spawnZ = player.z + sin(angle) * dist
+
+                if (Random.nextBoolean()) {
+                    val groundY = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING, spawnX.toInt(), spawnZ.toInt())
+                    val spawnY = maxOf(player.y + Random.nextDouble(3.0, 6.0), groundY + 3.0)
+                    val eye = DemonEyeEntity(HalloweenEntities.DEMON_EYE, overworld)
+                    eye.setPos(spawnX, spawnY, spawnZ)
+                    overworld.addFreshEntity(eye)
+                    spawnedBloodMobs.add(eye)
+                } else {
+                    val groundY = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawnX.toInt(), spawnZ.toInt())
+                    val targetPos = BlockPos(spawnX.toInt(), groundY, spawnZ.toInt())
+                    val floor = overworld.getBlockState(targetPos.below())
+                    if (floor.isAir || !overworld.getFluidState(targetPos).isEmpty) continue
+
+                    val zombie = BloodZombieEntity(HalloweenEntities.BLOOD_ZOMBIE, overworld)
+                    zombie.setPos(spawnX, groundY.toDouble(), spawnZ)
+                    overworld.addFreshEntity(zombie)
+                    spawnedBloodMobs.add(zombie)
+                }
+            }
+        }
+    }
+
+    private fun clearBloodMobs(server: MinecraftServer) {
+        val overworld = server.overworld()
+        for (mob in spawnedBloodMobs) {
+            if (mob.isAlive) {
+                overworld.sendParticles(
+                    ParticleTypes.POOF,
+                    mob.x,
+                    mob.y + 0.5,
+                    mob.z,
+                    10,
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.02,
+                )
+                mob.discard()
+            }
+        }
+        spawnedBloodMobs.clear()
+    }
+
+    private fun cleanupFarBloodMobs(server: MinecraftServer) {
+        val overworld = server.overworld()
+        val players = overworld.players()
+        if (players.isEmpty()) return
+
+        val iterator = spawnedBloodMobs.iterator()
+        while (iterator.hasNext()) {
+            val mob = iterator.next()
+            if (!mob.isAlive) {
+                iterator.remove()
+                continue
+            }
+            val pos = mob.position()
+            val nearestPlayerDist = players.minOfOrNull { it.position().distanceTo(pos) } ?: Double.MAX_VALUE
+            if (nearestPlayerDist > 80.0) {
+                mob.discard()
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun setNightTime(server: MinecraftServer) {
+        val overworld = server.overworld()
+        val clock =
+            overworld
+                .dimensionTypeRegistration()
+                .value()
+                .defaultClock()
+                .orElse(null)
+        if (clock != null) {
+            server.clockManager().setTotalTicks(clock, 18000L)
+        }
+    }
+
+    private fun maintainNightTime(server: MinecraftServer) {
+        val overworld = server.overworld()
+        val clock =
+            overworld
+                .dimensionTypeRegistration()
+                .value()
+                .defaultClock()
+                .orElse(null)
+        if (clock != null) {
+            val ticks = server.clockManager().getTotalTicks(clock)
+            val dayTicks = ticks % 24000L
+            if (dayTicks < 13000L || dayTicks > 23000L) {
+                server.clockManager().setTotalTicks(clock, 18000L)
+            }
+        }
     }
 
     private fun registerPackets() {
@@ -587,8 +775,9 @@ class HalloweenEvent(
     }
 
     private fun registerServerLifecycle() {
-        ServerLifecycleEvents.SERVER_STOPPING.register { _ ->
+        ServerLifecycleEvents.SERVER_STOPPING.register { server ->
             clearCandies()
+            clearBloodMobs(server)
             balanceManager?.save()
         }
     }

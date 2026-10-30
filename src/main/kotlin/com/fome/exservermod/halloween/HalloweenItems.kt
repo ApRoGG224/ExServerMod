@@ -2,12 +2,15 @@ package com.fome.exservermod.halloween
 
 import com.fome.exservermod.halloween.item.CandyPouchItem
 import com.fome.exservermod.halloween.item.PumpkinBowItem
+import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents
 import net.minecraft.core.Registry
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
+import net.minecraft.world.item.CreativeModeTabs
 import net.minecraft.world.item.Item
+import net.minecraft.world.item.ItemStack
 
 object HalloweenItems {
     val CANDY_POUCH_TIER1_ID: Identifier = Identifier.parse("exservermod:candy_pouch_tier1")
@@ -49,5 +52,19 @@ object HalloweenItems {
         Registry.register(BuiltInRegistries.ITEM, CANDY_POUCH_TIER2_ID, CANDY_POUCH_TIER2)
         Registry.register(BuiltInRegistries.ITEM, CANDY_POUCH_TIER3_ID, CANDY_POUCH_TIER3)
         Registry.register(BuiltInRegistries.ITEM, PUMPKIN_BOW_ID, PUMPKIN_BOW)
+
+        registerCreativeTabs()
+    }
+
+    private fun registerCreativeTabs() {
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register { entries ->
+            entries.accept(ItemStack(CANDY_POUCH_TIER1))
+            entries.accept(ItemStack(CANDY_POUCH_TIER2))
+            entries.accept(ItemStack(CANDY_POUCH_TIER3))
+            entries.accept(ItemStack(PUMPKIN_BOW))
+        }
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register { entries ->
+            entries.accept(ItemStack(PUMPKIN_BOW))
+        }
     }
 }
