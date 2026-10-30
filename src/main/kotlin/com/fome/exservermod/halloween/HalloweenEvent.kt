@@ -93,7 +93,6 @@ class HalloweenEvent(
     var merchantGraceTicksLeft: Int = 0
         private set
 
-    private var merchantSpawnTick: Int = 0
     private var spawnedMerchantUuid: UUID? = null
     private val spawnedCandies: MutableList<CandyEntity> = mutableListOf()
     private val spawnedBloodMobs: MutableList<Mob> = mutableListOf()
@@ -153,9 +152,8 @@ class HalloweenEvent(
                         cleanupFarBloodMobs(server)
                     }
 
-                    // Check for merchant spawn between minute 2 and 8
-                    val elapsed = (config.eventDurationSeconds * 20) - activeGatheringTicksLeft
-                    if (spawnedMerchantUuid == null && elapsed >= merchantSpawnTick) {
+                    // Ensure merchant is spawned
+                    if (spawnedMerchantUuid == null || server.overworld().getEntity(spawnedMerchantUuid!!) == null) {
                         spawnMerchant(server)
                     }
 
@@ -188,10 +186,6 @@ class HalloweenEvent(
         merchantGraceTicksLeft = config.merchantGraceSeconds * 20
         ticksUntilNextEvent = config.eventCooldownSeconds * 20
 
-        // Schedule merchant between 2400 (2m) and 9600 (8m)
-        merchantSpawnTick = Random.nextInt(2400, 9600)
-        spawnedMerchantUuid = null
-
         // Pick 6-8 randomized wares for this event
         activeMerchantWares = ALL_WARES_POOL.shuffled().take(Random.nextInt(6, 9))
 
@@ -201,6 +195,9 @@ class HalloweenEvent(
 
         val overworld = server.overworld()
         setNightTime(server)
+
+        // Spawn merchant near active player right away
+        spawnMerchant(server)
 
         // Sync blood sky to clients
         for (player in server.playerList.players) {
@@ -306,21 +303,34 @@ class HalloweenEvent(
     private fun spawnMerchant(server: MinecraftServer) {
         val overworld = server.overworld()
         val allLandmarks = landmarks.getAllLandmarks().filter { it.dimension == "minecraft:overworld" }
+        val activePlayer = overworld.players().firstOrNull()
 
         val (anchorX, anchorZ, landmarkName) =
-            if (allLandmarks.isNotEmpty()) {
+            if (activePlayer != null) {
+                val nearbyLm =
+                    allLandmarks
+                        .minByOrNull {
+                            val dx = it.x - activePlayer.x
+                            val dz = it.z - activePlayer.z
+                            dx * dx + dz * dz
+                        }?.takeIf {
+                            val dx = it.x - activePlayer.x
+                            val dz = it.z - activePlayer.z
+                            (dx * dx + dz * dz) <= 40000.0
+                        }
+                Triple(activePlayer.x, activePlayer.z, nearbyLm?.name ?: "Окрестности")
+            } else if (allLandmarks.isNotEmpty()) {
                 val lm = allLandmarks.random()
                 Triple(lm.x, lm.z, lm.name)
             } else {
-                val p = overworld.players().firstOrNull()
-                if (p != null) Triple(p.x, p.z, "Спавн") else Triple(0.0, 0.0, "Центр")
+                Triple(0.0, 0.0, "Спавн")
             }
 
         var chosenPos: BlockPos? = null
         var chosenDistance = 0.0
 
         for (attempt in 0 until 100) {
-            val distance = Random.nextDouble(10.0, 60.0)
+            val distance = Random.nextDouble(10.0, 25.0)
             val angle = Random.nextDouble(0.0, 2 * Math.PI)
             val targetX = (anchorX + cos(angle) * distance).toInt()
             val targetZ = (anchorZ + sin(angle) * distance).toInt()
@@ -347,7 +357,13 @@ class HalloweenEvent(
             val targetZ = anchorZ.toInt() + 5
             val groundY = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING, targetX, targetZ)
             chosenPos = BlockPos(targetX, groundY, targetZ)
-            chosenDistance = 15.0
+            chosenDistance = 10.0
+        }
+
+        val oldUuid = spawnedMerchantUuid
+        if (oldUuid != null) {
+            val oldEntity = overworld.getEntity(oldUuid)
+            oldEntity?.discard()
         }
 
         val standingBlock = overworld.getBlockState(chosenPos.below()).block
@@ -440,6 +456,10 @@ class HalloweenEvent(
         phase = HalloweenPhase.MERCHANT_ONLY
         clearCandies()
         clearBloodMobs(server)
+
+        if (spawnedMerchantUuid == null || server.overworld().getEntity(spawnedMerchantUuid!!) == null) {
+            spawnMerchant(server)
+        }
 
         // Turn off blood sky
         for (player in server.playerList.players) {

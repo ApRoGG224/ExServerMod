@@ -3,6 +3,7 @@ package com.fome.exservermod.halloween.entity
 import com.fome.exservermod.halloween.HalloweenEvent
 import com.fome.exservermod.halloween.HalloweenPhase
 import net.minecraft.ChatFormatting
+import net.minecraft.core.particles.BlockParticleOption
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.network.chat.Component
 import net.minecraft.network.syncher.EntityDataAccessor
@@ -13,6 +14,7 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
+import net.minecraft.util.Mth
 import net.minecraft.world.damagesource.DamageSource
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MoverType
@@ -20,11 +22,11 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier
 import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.monster.Monster
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.level.storage.ValueInput
 import net.minecraft.world.level.storage.ValueOutput
 import net.minecraft.world.phys.Vec3
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -42,15 +44,20 @@ class DemonEyeEntity(
             Monster
                 .createMonsterAttributes()
                 .add(Attributes.MAX_HEALTH, 5.0)
-                .add(Attributes.FLYING_SPEED, 0.6)
-                .add(Attributes.MOVEMENT_SPEED, 0.3)
-                .add(Attributes.FOLLOW_RANGE, 32.0)
+                .add(Attributes.FLYING_SPEED, 0.22)
+                .add(Attributes.MOVEMENT_SPEED, 0.18)
+                .add(Attributes.FOLLOW_RANGE, 30.0)
     }
 
-    private var diveCooldownTicks: Int = 40
+    private var diveCooldownTicks: Int = Random.nextInt(60, 100)
     private var isDiving: Boolean = false
     private var diveTicksLeft: Int = 0
     private var targetDivePos: Vec3? = null
+    private var windupTicks: Int = 0
+    private var stunTicks: Int = 0
+
+    private var wanderTarget: Vec3? = null
+    private var wanderTicksLeft: Int = 0
 
     init {
         isNoGravity = true
@@ -84,151 +91,208 @@ class DemonEyeEntity(
 
     override fun getDeathSound(): SoundEvent = SoundEvents.PHANTOM_DEATH
 
+    override fun hurtServer(
+        serverLevel: ServerLevel,
+        damageSource: DamageSource,
+        amount: Float,
+    ): Boolean {
+        val hit = super.hurtServer(serverLevel, damageSource, amount)
+        if (hit) {
+            stunTicks = 25
+            isDiving = false
+            windupTicks = 0
+
+            val attacker = damageSource.entity
+            if (attacker != null) {
+                val away =
+                    position()
+                        .subtract(attacker.position())
+                        .normalize()
+                        .scale(0.28)
+                        .add(0.0, 0.12, 0.0)
+                setDeltaMovement(away)
+            }
+
+            val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
+            serverLevel.sendParticles(bloodOption, x, y + 0.35, z, 8, 0.2, 0.2, 0.2, 0.08)
+        }
+        return hit
+    }
+
     override fun tick() {
         super.tick()
         isNoGravity = true
 
         val sLevel = level() as? ServerLevel ?: return
 
-        // Blood trail in flight
-        if (tickCount % 2 == 0) {
+        // Blood trail in flight (redstone splatter & crimson spore droplets, NO HEARTS)
+        if (tickCount % 3 == 0) {
             val mov = deltaMovement
             val trailOffset = if (mov.lengthSqr() > 0.001) mov.normalize().scale(-0.4) else Vec3.ZERO
+            val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
+            sLevel.sendParticles(
+                bloodOption,
+                x + trailOffset.x,
+                y + 0.35 + trailOffset.y,
+                z + trailOffset.z,
+                1,
+                0.04,
+                0.04,
+                0.04,
+                0.01,
+            )
             sLevel.sendParticles(
                 ParticleTypes.CRIMSON_SPORE,
                 x + trailOffset.x,
                 y + 0.35 + trailOffset.y,
                 z + trailOffset.z,
                 2,
-                0.06,
-                0.06,
-                0.06,
+                0.05,
+                0.05,
+                0.05,
                 0.01,
-            )
-            sLevel.sendParticles(
-                ParticleTypes.DAMAGE_INDICATOR,
-                x + trailOffset.x,
-                y + 0.35 + trailOffset.y,
-                z + trailOffset.z,
-                1,
-                0.03,
-                0.03,
-                0.03,
-                0.0,
             )
         }
 
-        // Target nearest player within 32 blocks
+        // Strict 30 blocks player detection radius
         var currentTarget = target
-        if (currentTarget == null || !currentTarget.isAlive || currentTarget.distanceToSqr(this) > 1024.0) {
-            currentTarget = sLevel.getNearestPlayer(this, 32.0)
+        if (currentTarget == null || !currentTarget.isAlive || currentTarget.distanceToSqr(this) > 900.0) {
+            val nearest = sLevel.getNearestPlayer(this, 30.0)
+            currentTarget = if (nearest != null && nearest.isAlive && !nearest.isSpectator) nearest else null
             target = currentTarget
         }
 
+        // Current ground level directly below the eye
+        val groundY = sLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, blockX, blockZ)
+        val maxAllowedY = groundY + 50.0
+
         if (currentTarget != null && currentTarget.isAlive) {
+            // Player is within 30 blocks
             val distToTarget = position().distanceTo(currentTarget.position())
 
-            if (isDiving) {
+            if (stunTicks > 0) {
+                stunTicks--
+                val recoilVel = deltaMovement.scale(0.85)
+                setDeltaMovement(recoilVel)
+                move(MoverType.SELF, recoilVel)
+            } else if (windupTicks > 0) {
+                windupTicks--
+                // Windup pause/jitter right before the dash
+                val slowVel = deltaMovement.scale(0.65)
+                setDeltaMovement(slowVel)
+                move(MoverType.SELF, slowVel)
+
+                if (windupTicks <= 0) {
+                    isDiving = true
+                    diveTicksLeft = 45
+                    targetDivePos = currentTarget.eyePosition
+                    sLevel.playSound(null, x, y, z, SoundEvents.PHANTOM_SWOOP, SoundSource.HOSTILE, 0.9f, 1.2f)
+                }
+            } else if (isDiving) {
                 diveTicksLeft--
                 val targetPos = targetDivePos ?: currentTarget.eyePosition
                 val diff = targetPos.subtract(position())
                 val len = diff.length()
 
-                if (len < 1.3) {
-                    // Impact hit! 1 HP pure damage bypasses armor
-                    if (currentTarget is ServerPlayer) {
-                        currentTarget.hurtServer(sLevel, damageSources().magic(), 1.0f)
-                    } else {
-                        currentTarget.hurtServer(sLevel, damageSources().magic(), 1.0f)
-                    }
+                if (len < 1.3 || distToTarget < 1.3) {
+                    // Hit player with EYE (front) - 1 HP pure magic damage
+                    currentTarget.hurtServer(sLevel, damageSources().magic(), 1.0f)
 
-                    sLevel.playSound(
-                        null,
-                        x,
-                        y,
-                        z,
-                        SoundEvents.FOX_BITE,
-                        SoundSource.HOSTILE,
-                        1.2f,
-                        1.0f,
-                    )
-                    sLevel.sendParticles(
-                        ParticleTypes.DAMAGE_INDICATOR,
-                        x,
-                        y + 0.3,
-                        z,
-                        10,
-                        0.25,
-                        0.25,
-                        0.25,
-                        0.1,
-                    )
+                    sLevel.playSound(null, x, y, z, SoundEvents.FOX_BITE, SoundSource.HOSTILE, 1.2f, 1.0f)
+                    val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
+                    sLevel.sendParticles(bloodOption, x, y + 0.35, z, 15, 0.25, 0.25, 0.25, 0.1)
 
-                    // Bounce back & up
-                    val bounce = diff.normalize().scale(-0.45).add(0.0, 0.35, 0.0)
+                    // Bounce back gently
+                    val bounce = diff.normalize().scale(-0.25).add(0.0, 0.2, 0.0)
                     setDeltaMovement(bounce)
                     isDiving = false
-                    diveCooldownTicks = Random.nextInt(60, 100)
-                } else if (diveTicksLeft <= 0 || len > 25.0) {
+                    diveCooldownTicks = Random.nextInt(70, 110)
+                } else if (diveTicksLeft <= 0 || len > 28.0) {
                     isDiving = false
-                    diveCooldownTicks = Random.nextInt(40, 80)
+                    diveCooldownTicks = Random.nextInt(50, 80)
                 } else {
-                    // Accelerate along dive
-                    val diveVelocity = diff.normalize().scale(0.55)
+                    // Slow, controllable dash (0.28 blocks/tick) - easy for player to dodge/hit!
+                    val diveVelocity = diff.normalize().scale(0.28)
                     setDeltaMovement(diveVelocity)
                     move(MoverType.SELF, diveVelocity)
                 }
             } else {
                 diveCooldownTicks--
-                if (diveCooldownTicks <= 0 && distToTarget < 20.0) {
-                    // Start swooping dive!
-                    isDiving = true
-                    diveTicksLeft = 50
-                    targetDivePos = currentTarget.eyePosition
-
-                    sLevel.playSound(
-                        null,
-                        x,
-                        y,
-                        z,
-                        SoundEvents.PHANTOM_SWOOP,
-                        SoundSource.HOSTILE,
-                        1.1f,
-                        1.2f,
-                    )
+                if (diveCooldownTicks <= 0 && distToTarget < 15.0) {
+                    // Start windup before lunge
+                    windupTicks = 16
+                    diveCooldownTicks = 80
                 } else {
-                    // Hover/orbit around target
-                    val orbitAngle = (tickCount * 0.05) % (2 * Math.PI)
-                    val desiredDist = 7.0
-                    val orbitX = currentTarget.x + cos(orbitAngle) * desiredDist
-                    val orbitY = currentTarget.y + 3.0 + sin(tickCount * 0.08) * 0.8
-                    val orbitZ = currentTarget.z + sin(orbitAngle) * desiredDist
-                    val orbitTarget = Vec3(orbitX, orbitY, orbitZ)
+                    // Slow, steady approach (hovering above player eye level)
+                    val desiredY = currentTarget.eyeY + 0.8 + sin(tickCount * 0.06) * 0.4
+                    val targetPos = Vec3(currentTarget.x, desiredY, currentTarget.z)
+                    val diff = targetPos.subtract(position())
 
-                    val diff = orbitTarget.subtract(position())
-                    val speed = 0.18
-                    val vel = diff.scale(speed)
+                    // Approach speed: 0.16 (slow enough for running player to catch up!)
+                    val moveSpeed = if (distToTarget > 10.0) 0.18 else 0.13
+                    val vel = diff.normalize().scale(moveSpeed)
                     setDeltaMovement(vel)
                     move(MoverType.SELF, vel)
                 }
             }
 
-            // Face target / direction
+            // Look directly at target with FRONT of eye (pupil)
             val dx = currentTarget.x - x
+            val dy = (currentTarget.eyeY - 0.2) - y
             val dz = currentTarget.z - z
-            val dy = currentTarget.eyeY - y
             val horizontalDist = sqrt(dx * dx + dz * dz)
-            yRot = (-Math.toDegrees(atan2(dx, dz))).toFloat()
-            xRot = (-Math.toDegrees(atan2(dy, horizontalDist))).toFloat()
-            yHeadRot = yRot
+            val targetYaw = (Mth.atan2(dz, dx) * (180.0 / Math.PI)).toFloat() - 90.0f
+            val targetPitch = (-(Mth.atan2(dy, horizontalDist) * (180.0 / Math.PI))).toFloat()
+            yRot = targetYaw
+            yHeadRot = targetYaw
+            yBodyRot = targetYaw
+            xRot = targetPitch
         } else {
-            // Idle hover above ground
-            val groundY = sLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, blockX, blockZ)
-            val hoverY = groundY + 4.0 + sin(tickCount * 0.06) * 0.5
-            val diffY = hoverY - y
-            val idleVel = Vec3(0.0, diffY * 0.1, 0.0)
-            setDeltaMovement(idleVel)
-            move(MoverType.SELF, idleVel)
+            // NO player within 30 blocks: chaotic wandering, but STRICTLY capped at <= 50 blocks above ground
+            if (y >= maxAllowedY) {
+                // Must descend immediately
+                val descendVel = Vec3(deltaMovement.x * 0.7, -0.22, deltaMovement.z * 0.7)
+                setDeltaMovement(descendVel)
+                move(MoverType.SELF, descendVel)
+            } else if (y <= groundY + 2.5) {
+                // Too close to ground, lift up slightly
+                val ascendVel = Vec3(deltaMovement.x * 0.7, 0.15, deltaMovement.z * 0.7)
+                setDeltaMovement(ascendVel)
+                move(MoverType.SELF, ascendVel)
+            } else {
+                wanderTicksLeft--
+                if (wanderTicksLeft <= 0 || wanderTarget == null || position().distanceToSqr(wanderTarget!!) < 2.0) {
+                    wanderTicksLeft = Random.nextInt(40, 80)
+                    val wanderAngle = Random.nextDouble(0.0, 2 * Math.PI)
+                    val wanderDist = Random.nextDouble(4.0, 12.0)
+                    val wx = x + cos(wanderAngle) * wanderDist
+                    val wz = z + sin(wanderAngle) * wanderDist
+                    val targetGroundY = sLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, wx.toInt(), wz.toInt())
+                    // Target height between +4 and +20 blocks from ground (well below 50 blocks cap!)
+                    val wy = (targetGroundY + Random.nextDouble(4.0, 18.0)).coerceAtMost(targetGroundY + 45.0)
+                    wanderTarget = Vec3(wx, wy, wz)
+                }
+
+                val wanderDiff = wanderTarget!!.subtract(position())
+                val wanderSpeed = 0.08
+                val wanderVel = wanderDiff.normalize().scale(wanderSpeed)
+                setDeltaMovement(wanderVel)
+                move(MoverType.SELF, wanderVel)
+
+                // Face wandering direction with pupil
+                if (wanderVel.horizontalDistanceSqr() > 0.0005) {
+                    val wdx = wanderVel.x
+                    val wdz = wanderVel.z
+                    val wdy = wanderVel.y
+                    val wHoriz = sqrt(wdx * wdx + wdz * wdz)
+                    val wYaw = (Mth.atan2(wdz, wdx) * (180.0 / Math.PI)).toFloat() - 90.0f
+                    val wPitch = (-(Mth.atan2(wdy, wHoriz) * (180.0 / Math.PI))).toFloat()
+                    yRot = wYaw
+                    yHeadRot = wYaw
+                    yBodyRot = wYaw
+                    xRot = wPitch
+                }
+            }
         }
     }
 
@@ -252,16 +316,19 @@ class DemonEyeEntity(
                 true,
             )
         }
+
+        // Blood burst upon death (redstone block particles, ZERO hearts!)
+        val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
         sLevel.sendParticles(
-            ParticleTypes.DAMAGE_INDICATOR,
+            bloodOption,
             x,
-            y + 0.3,
+            y + 0.35,
             z,
-            10,
-            0.2,
-            0.2,
-            0.2,
-            0.1,
+            16,
+            0.3,
+            0.3,
+            0.3,
+            0.12,
         )
     }
 }

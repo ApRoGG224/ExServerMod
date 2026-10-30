@@ -3,6 +3,7 @@ package com.fome.exservermod.halloween.entity
 import com.fome.exservermod.halloween.HalloweenEvent
 import com.fome.exservermod.halloween.HalloweenPhase
 import net.minecraft.ChatFormatting
+import net.minecraft.core.particles.BlockParticleOption
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
@@ -14,6 +15,7 @@ import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.monster.zombie.Zombie
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.Blocks
 import kotlin.random.Random
 
 class BloodZombieEntity(
@@ -25,16 +27,28 @@ class BloodZombieEntity(
     override fun tick() {
         super.tick()
         val sLevel = level() as? ServerLevel ?: return
-        if (tickCount % 8 == 0) {
+        if (tickCount % 6 == 0) {
+            val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
             sLevel.sendParticles(
-                ParticleTypes.DAMAGE_INDICATOR,
+                bloodOption,
                 x,
                 y + 1.1,
                 z,
+                2,
+                0.15,
+                0.2,
+                0.15,
+                0.02,
+            )
+            sLevel.sendParticles(
+                ParticleTypes.CRIMSON_SPORE,
+                x,
+                y + 1.2,
+                z,
                 1,
-                0.15,
-                0.3,
-                0.15,
+                0.1,
+                0.1,
+                0.1,
                 0.01,
             )
         }
@@ -88,16 +102,17 @@ class BloodZombieEntity(
                 true,
             )
         }
+        val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
         sLevel.sendParticles(
-            ParticleTypes.DAMAGE_INDICATOR,
+            bloodOption,
             x,
             y + 1.0,
             z,
-            12,
+            20,
             0.3,
             0.5,
             0.3,
-            0.1,
+            0.15,
         )
     }
 }

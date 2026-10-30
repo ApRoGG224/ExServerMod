@@ -43,8 +43,8 @@ class DemonEyeModel(
                 CubeListBuilder
                     .create()
                     .texOffs(32, 0)
-                    .addBox(-1.0f, -1.0f, -6.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
-                PartPose.offset(-2.0f, -2.0f, -4.0f),
+                    .addBox(-1.0f, -1.0f, 0.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
+                PartPose.offset(-2.0f, -2.0f, 4.0f),
             )
 
             bodyPart.addOrReplaceChild(
@@ -52,8 +52,8 @@ class DemonEyeModel(
                 CubeListBuilder
                     .create()
                     .texOffs(32, 8)
-                    .addBox(-1.0f, -1.0f, -6.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
-                PartPose.offset(2.0f, -2.0f, -4.0f),
+                    .addBox(-1.0f, -1.0f, 0.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
+                PartPose.offset(2.0f, -2.0f, 4.0f),
             )
 
             bodyPart.addOrReplaceChild(
@@ -61,8 +61,8 @@ class DemonEyeModel(
                 CubeListBuilder
                     .create()
                     .texOffs(48, 0)
-                    .addBox(-1.0f, -1.0f, -6.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
-                PartPose.offset(-2.0f, 2.0f, -4.0f),
+                    .addBox(-1.0f, -1.0f, 0.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
+                PartPose.offset(-2.0f, 2.0f, 4.0f),
             )
 
             bodyPart.addOrReplaceChild(
@@ -70,8 +70,8 @@ class DemonEyeModel(
                 CubeListBuilder
                     .create()
                     .texOffs(48, 8)
-                    .addBox(-1.0f, -1.0f, -6.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
-                PartPose.offset(2.0f, 2.0f, -4.0f),
+                    .addBox(-1.0f, -1.0f, 0.0f, 2.0f, 2.0f, 6.0f, CubeDeformation.NONE),
+                PartPose.offset(2.0f, 2.0f, 4.0f),
             )
 
             return LayerDefinition.create(mesh, 64, 32)
