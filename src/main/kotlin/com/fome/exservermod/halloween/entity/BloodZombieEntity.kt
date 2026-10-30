@@ -24,6 +24,19 @@ class BloodZombieEntity(
 ) : Zombie(type, level) {
     override fun isSunSensitive(): Boolean = false
 
+    override fun hurtServer(
+        serverLevel: ServerLevel,
+        damageSource: DamageSource,
+        amount: Float,
+    ): Boolean {
+        val hit = super.hurtServer(serverLevel, damageSource, amount)
+        if (hit) {
+            val bloodOption = BlockParticleOption(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.defaultBlockState())
+            serverLevel.sendParticles(bloodOption, x, y + 1.0, z, 10, 0.25, 0.35, 0.25, 0.08)
+        }
+        return hit
+    }
+
     override fun tick() {
         super.tick()
         val sLevel = level() as? ServerLevel ?: return

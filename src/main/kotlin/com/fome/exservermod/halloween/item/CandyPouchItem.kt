@@ -4,6 +4,9 @@ import net.minecraft.ChatFormatting
 import net.minecraft.network.chat.Component
 import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.TooltipFlag
+import net.minecraft.world.item.component.TooltipDisplay
+import java.util.function.Consumer
 
 class CandyPouchItem(
     val tier: Int,
@@ -11,18 +14,26 @@ class CandyPouchItem(
     val candyReward: Int,
     properties: Properties,
 ) : Item(properties) {
-    fun appendHoverText(
+    override fun appendHoverText(
         stack: ItemStack,
-        tooltipComponents: MutableList<Component>,
+        context: TooltipContext,
+        display: TooltipDisplay,
+        tooltipOutput: Consumer<Component>,
+        tooltipFlag: TooltipFlag,
     ) {
         val seconds = channelDurationTicks.toDouble() / 20.0
-        tooltipComponents.add(
+        tooltipOutput.accept(
             Component
                 .translatable(
-                    "exservermod.item.candy_pouch.desc",
+                    "item.exservermod.candy_pouch.desc",
                     "%.1f".format(seconds),
                     candyReward,
                 ).withStyle(ChatFormatting.GOLD),
+        )
+        tooltipOutput.accept(
+            Component
+                .translatable("item.exservermod.candy_pouch.lore")
+                .withStyle(ChatFormatting.DARK_PURPLE),
         )
     }
 

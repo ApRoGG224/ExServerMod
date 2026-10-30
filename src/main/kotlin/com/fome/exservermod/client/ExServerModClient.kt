@@ -63,7 +63,7 @@ class ExServerModClient : ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(OpenMerchantGuiPayload.TYPE) { payload, ctx ->
             ctx.client().execute {
-                val currentScreen = HalloweenMerchantScreen.currentScreen
+                val currentScreen = ctx.client().gui.screen() as? HalloweenMerchantScreen
                 if (currentScreen != null) {
                     currentScreen.updatePayload(payload)
                 } else {

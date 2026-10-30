@@ -406,6 +406,9 @@ class HalloweenEvent(
         server: MinecraftServer,
         player: ServerPlayer,
     ) {
+        if (activeMerchantWares.isEmpty()) {
+            activeMerchantWares = ALL_WARES_POOL.shuffled().take(Random.nextInt(6, 9))
+        }
         val overworld = server.overworld()
         val look = player.lookAngle
         val spawnX = player.x + look.x * 2.0
@@ -708,10 +711,12 @@ class HalloweenEvent(
             }
         }
 
-        // Refresh merchant GUI
-        val newBalance = mgr.getBalance(player.uuid)
-        val prices = activeMerchantWares.map { config.prices[it] ?: 100 }
-        ServerPlayNetworking.send(player, OpenMerchantGuiPayload(newBalance, activeMerchantWares, prices))
+        if (itemKey != "ghost_pet") {
+            // Refresh merchant GUI for normal items
+            val newBalance = mgr.getBalance(player.uuid)
+            val prices = activeMerchantWares.map { config.prices[it] ?: 100 }
+            ServerPlayNetworking.send(player, OpenMerchantGuiPayload(newBalance, activeMerchantWares, prices))
+        }
     }
 
     private fun handleGhostNaming(

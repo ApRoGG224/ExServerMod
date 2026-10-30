@@ -1,6 +1,7 @@
 package com.fome.exservermod.halloween.entity
 
 import net.minecraft.core.BlockPos
+import net.minecraft.core.particles.DustParticleOptions
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
@@ -9,6 +10,8 @@ import net.minecraft.sounds.SoundSource
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.InteractionResult
 import net.minecraft.world.damagesource.DamageSource
+import net.minecraft.world.effect.MobEffectInstance
+import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MoverType
 import net.minecraft.world.entity.animal.allay.Allay
@@ -21,6 +24,8 @@ import net.minecraft.world.level.material.Fluids
 import net.minecraft.world.level.storage.ValueInput
 import net.minecraft.world.level.storage.ValueOutput
 import net.minecraft.world.phys.Vec3
+import net.minecraft.world.scores.TeamColor
+import java.util.Optional
 import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.sin
@@ -31,6 +36,7 @@ class GhostPetEntity(
 ) : Allay(type, level) {
     var ownerUuid: UUID? = null
     var isWaiting: Boolean = false
+    private var waitAnchorPos: Vec3? = null
     private var lightPos: BlockPos? = null
 
     init {
@@ -53,12 +59,15 @@ class GhostPetEntity(
             isWaiting = !isWaiting
             val sLevel = level() as? ServerLevel
             if (isWaiting) {
-                setDeltaMovement(Vec3.ZERO)
                 val groundY = sLevel?.getHeight(Heightmap.Types.MOTION_BLOCKING, blockX, blockZ) ?: y.toInt()
-                setPos(x, groundY.toDouble(), z)
+                val waitY = maxOf(y, groundY.toDouble() + 1.2)
+                waitAnchorPos = Vec3(x, waitY, z)
+                setPos(x, waitY, z)
+                setDeltaMovement(Vec3.ZERO)
                 player.sendOverlayMessage(Component.literal("§bПризрак ждет вас на этом месте"))
                 sLevel?.playSound(null, x, y, z, SoundEvents.ALLAY_ITEM_TAKEN, SoundSource.NEUTRAL, 1.2f, 1.5f)
             } else {
+                waitAnchorPos = null
                 player.sendOverlayMessage(Component.literal("§bПризрак снова следует за вами!"))
                 sLevel?.playSound(null, x, y, z, SoundEvents.ALLAY_AMBIENT_WITHOUT_ITEM, SoundSource.NEUTRAL, 1.2f, 1.3f)
             }
@@ -78,6 +87,9 @@ class GhostPetEntity(
             }
         }
         isWaiting = input.getBooleanOr("IsWaiting", false)
+        if (isWaiting) {
+            waitAnchorPos = Vec3(x, y, z)
+        }
     }
 
     override fun addAdditionalSaveData(output: ValueOutput) {
@@ -120,7 +132,41 @@ class GhostPetEntity(
 
     override fun remove(reason: RemovalReason) {
         removeLight()
+        try {
+            (level() as? ServerLevel)?.scoreboard?.removePlayerFromTeam(stringUUID)
+        } catch (_: Exception) {
+        }
         super.remove(reason)
+    }
+
+    private fun ensureBlueGlow(sLevel: ServerLevel) {
+        if (tickCount % 40 == 1) {
+            try {
+                val scoreboard = sLevel.scoreboard
+                val teamName = "ghost_pet_glow"
+                var team = scoreboard.getPlayerTeam(teamName)
+                if (team == null) {
+                    team = scoreboard.addPlayerTeam(teamName)
+                    team.setColor(Optional.of(TeamColor.AQUA))
+                }
+                if (!team.players.contains(stringUUID)) {
+                    scoreboard.addPlayerToTeam(stringUUID, team)
+                }
+                if (!hasEffect(MobEffects.GLOWING)) {
+                    addEffect(
+                        MobEffectInstance(
+                            MobEffects.GLOWING,
+                            MobEffectInstance.INFINITE_DURATION,
+                            0,
+                            false,
+                            false,
+                            false,
+                        ),
+                    )
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     override fun tick() {
@@ -128,37 +174,75 @@ class GhostPetEntity(
         noPhysics = true
 
         val sLevel = level() as? ServerLevel ?: return
+        ensureBlueGlow(sLevel)
+
         val currentOwnerUuid = ownerUuid ?: return
 
-        // Atmospheric soul flame and glow particles
-        if (tickCount % 6 == 0) {
+        // Atmospheric bright soul-blue flame, ascending souls, and cyan dust particles
+        if (tickCount % 2 == 0) {
             sLevel.sendParticles(
                 ParticleTypes.SOUL_FIRE_FLAME,
                 x,
                 y + 0.35,
                 z,
-                1,
-                0.08,
-                0.08,
-                0.08,
-                0.01,
+                2,
+                0.12,
+                0.12,
+                0.12,
+                0.005,
             )
             sLevel.sendParticles(
-                ParticleTypes.GLOW,
+                DustParticleOptions(0x00E5FF, 1.2f),
+                x,
+                y + 0.35,
+                z,
+                2,
+                0.15,
+                0.15,
+                0.15,
+                0.01,
+            )
+        }
+        if (tickCount % 12 == 0) {
+            sLevel.sendParticles(
+                ParticleTypes.SOUL,
+                x,
+                y + 0.3,
+                z,
+                1,
+                0.05,
+                0.05,
+                0.05,
+                0.015,
+            )
+            sLevel.sendParticles(
+                ParticleTypes.SCULK_SOUL,
                 x,
                 y + 0.35,
                 z,
                 1,
-                0.1,
-                0.1,
-                0.1,
+                0.08,
+                0.08,
+                0.08,
                 0.01,
             )
         }
 
-        // Maintain light when waiting on the floor
+        // Maintain slow ghostly flight when sitting / waiting
         if (isWaiting) {
-            setDeltaMovement(Vec3.ZERO)
+            val anchor = waitAnchorPos ?: Vec3(x, y, z).also { waitAnchorPos = it }
+            val slowBobY = anchor.y + sin(tickCount * 0.04) * 0.2
+            val slowDriftX = anchor.x + cos(tickCount * 0.02) * 0.3
+            val slowDriftZ = anchor.z + sin(tickCount * 0.02) * 0.3
+            val targetWaitPos = Vec3(slowDriftX, slowBobY, slowDriftZ)
+
+            val diff = targetWaitPos.subtract(position())
+            val slowVel = diff.scale(0.08)
+            setDeltaMovement(slowVel)
+            move(MoverType.SELF, slowVel)
+
+            yRot = (yRot + 0.5f) % 360.0f
+            yHeadRot = yRot
             updateLight(sLevel, blockPosition())
             return
         }

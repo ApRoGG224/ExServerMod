@@ -18,10 +18,6 @@ import kotlin.math.max
 class HalloweenMerchantScreen(
     private var payload: OpenMerchantGuiPayload,
 ) : Screen(Component.translatable("exservermod.halloween.merchant_gui_title")) {
-    companion object {
-        var currentScreen: HalloweenMerchantScreen? = null
-    }
-
     private val rowHeight = 24
     private val panelWidth = 320
 
@@ -75,7 +71,6 @@ class HalloweenMerchantScreen(
 
     override fun init() {
         super.init()
-        currentScreen = this
 
         val panelRight = getPanelRight()
         val startY = getStartY()
@@ -196,11 +191,6 @@ class HalloweenMerchantScreen(
         if (hoveredStack != null && !hoveredStack.isEmpty) {
             extractor.setTooltipForNextFrame(font, hoveredStack, mouseX, mouseY)
         }
-    }
-
-    override fun onClose() {
-        currentScreen = null
-        super.onClose()
     }
 
     override fun isPauseScreen(): Boolean = false

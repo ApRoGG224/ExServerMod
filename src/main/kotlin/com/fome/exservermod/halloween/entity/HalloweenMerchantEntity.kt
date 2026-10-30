@@ -4,6 +4,7 @@ import com.fome.exservermod.halloween.HalloweenEvent
 import com.fome.exservermod.halloween.network.OpenMerchantGuiPayload
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.network.chat.Component
+import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
@@ -17,7 +18,9 @@ import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal
 import net.minecraft.world.entity.npc.wanderingtrader.WanderingTrader
 import net.minecraft.world.entity.player.Player
+import net.minecraft.world.item.trading.MerchantOffers
 import net.minecraft.world.level.Level
+import kotlin.random.Random
 
 class HalloweenMerchantEntity(
     type: EntityType<out WanderingTrader>,
@@ -88,9 +91,23 @@ class HalloweenMerchantEntity(
         player: Player,
         hand: InteractionHand,
     ): InteractionResult {
-        if (player is ServerPlayer && hand == InteractionHand.MAIN_HAND) {
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS
+        }
+        if (level().isClientSide) {
+            return InteractionResult.SUCCESS
+        }
+        if (player is ServerPlayer) {
             val balance = HalloweenEvent.balanceManager?.getBalance(player.uuid) ?: 0
-            val wares = HalloweenEvent.activeMerchantWares
+            val wares =
+                if (HalloweenEvent.activeMerchantWares.isNotEmpty()) {
+                    HalloweenEvent.activeMerchantWares
+                } else {
+                    val count = minOf(HalloweenEvent.ALL_WARES_POOL.size, Random.nextInt(6, 9))
+                    val generated = HalloweenEvent.ALL_WARES_POOL.shuffled().take(count)
+                    HalloweenEvent.activeMerchantWares = generated
+                    generated
+                }
             val prices = wares.map { HalloweenEvent.config.prices[it] ?: 100 }
 
             ServerPlayNetworking.send(player, OpenMerchantGuiPayload(balance, wares, prices))
@@ -107,6 +124,18 @@ class HalloweenMerchantEntity(
             )
             return InteractionResult.SUCCESS
         }
-        return InteractionResult.SUCCESS
+        return InteractionResult.CONSUME
+    }
+
+    override fun getOffers(): MerchantOffers = MerchantOffers()
+
+    override fun updateTrades(level: ServerLevel) {
+    }
+
+    override fun openTradingScreen(
+        player: Player,
+        displayName: Component,
+        level: Int,
+    ) {
     }
 }

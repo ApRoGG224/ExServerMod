@@ -16,11 +16,33 @@ import net.minecraft.world.item.BowItem
 import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
+import net.minecraft.world.item.TooltipFlag
+import net.minecraft.world.item.component.TooltipDisplay
 import net.minecraft.world.level.Level
+import java.util.function.Consumer
 
 class PumpkinBowItem(
     properties: Item.Properties,
 ) : BowItem(properties) {
+    override fun appendHoverText(
+        stack: ItemStack,
+        context: TooltipContext,
+        display: TooltipDisplay,
+        tooltipOutput: Consumer<Component>,
+        tooltipFlag: TooltipFlag,
+    ) {
+        tooltipOutput.accept(
+            Component
+                .translatable("item.exservermod.pumpkin_bow.desc")
+                .withStyle(ChatFormatting.GOLD),
+        )
+        tooltipOutput.accept(
+            Component
+                .translatable("item.exservermod.pumpkin_bow.lore")
+                .withStyle(ChatFormatting.DARK_AQUA),
+        )
+    }
+
     override fun use(
         level: Level,
         player: Player,

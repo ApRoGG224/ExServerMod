@@ -53,6 +53,9 @@ class DemonEyeEntity(
     private var isDiving: Boolean = false
     private var diveTicksLeft: Int = 0
     private var targetDivePos: Vec3? = null
+    private var isRetreating: Boolean = false
+    private var retreatTicksLeft: Int = 0
+    private var targetRetreatPos: Vec3? = null
     private var windupTicks: Int = 0
     private var stunTicks: Int = 0
 
@@ -100,6 +103,7 @@ class DemonEyeEntity(
         if (hit) {
             stunTicks = 25
             isDiving = false
+            isRetreating = false
             windupTicks = 0
 
             val attacker = damageSource.entity
@@ -193,8 +197,9 @@ class DemonEyeEntity(
                 val targetPos = targetDivePos ?: currentTarget.eyePosition
                 val diff = targetPos.subtract(position())
                 val len = diff.length()
+                val distToEye = position().distanceTo(currentTarget.eyePosition)
 
-                if (len < 1.3 || distToTarget < 1.3) {
+                if (distToEye < 1.35 || distToTarget < 1.35) {
                     // Hit player with EYE (front) - 1 HP pure magic damage
                     currentTarget.hurtServer(sLevel, damageSources().magic(), 1.0f)
 
@@ -206,15 +211,47 @@ class DemonEyeEntity(
                     val bounce = diff.normalize().scale(-0.25).add(0.0, 0.2, 0.0)
                     setDeltaMovement(bounce)
                     isDiving = false
+                    isRetreating = false
                     diveCooldownTicks = Random.nextInt(70, 110)
-                } else if (diveTicksLeft <= 0 || len > 28.0) {
+                } else if (diveTicksLeft <= 0 || len < 1.0 || len > 28.0) {
+                    // Missed player! Retreat 5 blocks away and try to attack again
                     isDiving = false
-                    diveCooldownTicks = Random.nextInt(50, 80)
+                    isRetreating = true
+                    retreatTicksLeft = 35
+                    val away = position().subtract(currentTarget.eyePosition)
+                    val horizAway =
+                        Vec3(away.x, 0.0, away.z).let {
+                            if (it.lengthSqr() < 0.01) Vec3(1.0, 0.0, 0.0) else it.normalize()
+                        }
+                    val retreatY = currentTarget.eyeY + 1.2
+                    targetRetreatPos =
+                        Vec3(
+                            currentTarget.x + horizAway.x * 5.0,
+                            retreatY,
+                            currentTarget.z + horizAway.z * 5.0,
+                        )
+                    sLevel.playSound(null, x, y, z, SoundEvents.PHANTOM_FLAP, SoundSource.HOSTILE, 0.9f, 1.3f)
                 } else {
                     // Slow, controllable dash (0.28 blocks/tick) - easy for player to dodge/hit!
                     val diveVelocity = diff.normalize().scale(0.28)
                     setDeltaMovement(diveVelocity)
                     move(MoverType.SELF, diveVelocity)
+                }
+            } else if (isRetreating) {
+                retreatTicksLeft--
+                val targetPos = targetRetreatPos ?: currentTarget.eyePosition.add(0.0, 1.5, 0.0)
+                val diff = targetPos.subtract(position())
+                val distToRetreat = diff.length()
+
+                if (distToRetreat < 0.8 || retreatTicksLeft <= 0) {
+                    // Reached 5 blocks retreat: wind up and try attacking again immediately!
+                    isRetreating = false
+                    windupTicks = 12
+                    sLevel.playSound(null, x, y, z, SoundEvents.BAT_TAKEOFF, SoundSource.HOSTILE, 0.9f, 1.2f)
+                } else {
+                    val retreatVel = diff.normalize().scale(0.24)
+                    setDeltaMovement(retreatVel)
+                    move(MoverType.SELF, retreatVel)
                 }
             } else {
                 diveCooldownTicks--
@@ -248,6 +285,9 @@ class DemonEyeEntity(
             yBodyRot = targetYaw
             xRot = targetPitch
         } else {
+            isDiving = false
+            isRetreating = false
+            windupTicks = 0
             // NO player within 30 blocks: chaotic wandering, but STRICTLY capped at <= 50 blocks above ground
             if (y >= maxAllowedY) {
                 // Must descend immediately
