@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "E E",
+    "E E",
+    "EPE"
+  ],
+  "key": {
+    "E": "minecraft:end_rod",
+    "P": "minecraft:carved_pumpkin"
+  },
+  "result": {
+    "count": 1,
+    "id": "exservermod:candy_pouch_tier1"
+  }
+}

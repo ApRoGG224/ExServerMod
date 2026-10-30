@@ -5,6 +5,16 @@ import com.fome.exservermod.disguise.DisguiseManager
 import com.fome.exservermod.game.GameCommands
 import com.fome.exservermod.game.GameEventHandler
 import com.fome.exservermod.game.HideAndSeekGame
+import com.fome.exservermod.halloween.HalloweenCommands
+import com.fome.exservermod.halloween.HalloweenEntities
+import com.fome.exservermod.halloween.HalloweenEvent
+import com.fome.exservermod.halloween.HalloweenItems
+import com.fome.exservermod.halloween.network.CandyChannelPayload
+import com.fome.exservermod.halloween.network.HalloweenSkySyncPayload
+import com.fome.exservermod.halloween.network.MerchantBuyPayload
+import com.fome.exservermod.halloween.network.OpenGhostNamingPayload
+import com.fome.exservermod.halloween.network.OpenMerchantGuiPayload
+import com.fome.exservermod.halloween.network.SubmitGhostNamePayload
 import com.fome.exservermod.landmarks.LandmarkCommands
 import com.fome.exservermod.landmarks.LandmarkManager
 import com.fome.exservermod.network.CloseRoulettePayload
@@ -38,16 +48,34 @@ object ExServerMod : ModInitializer {
 
     val waveManager = WaveManager()
 
+    val halloweenEvent by lazy {
+        val configDir = FabricLoader.getInstance().configDir.resolve("exservermod")
+        val configFile = configDir.resolve("halloween.json").toFile()
+        val storageFile = configDir.resolve("halloween_balances.json").toFile()
+        HalloweenEvent(landmarkManager, configFile, storageFile)
+    }
+
     override fun onInitialize() {
         logger.info("[ExServerMod] Initializing server mod.")
 
         ModSounds.register()
+        HalloweenItems.register()
+        HalloweenEntities.register()
 
+        // Disguise & Roulette Payloads
         PayloadTypeRegistry.clientboundPlay().register(OpenRoulettePayload.TYPE, OpenRoulettePayload.STREAM_CODEC)
         PayloadTypeRegistry.clientboundPlay().register(CloseRoulettePayload.TYPE, CloseRoulettePayload.STREAM_CODEC)
         PayloadTypeRegistry.clientboundPlay().register(DisguiseSyncPayload.TYPE, DisguiseSyncPayload.STREAM_CODEC)
         PayloadTypeRegistry.serverboundPlay().register(RouletteFinishedPayload.TYPE, RouletteFinishedPayload.STREAM_CODEC)
         PayloadTypeRegistry.serverboundPlay().register(RouletteCanceledPayload.TYPE, RouletteCanceledPayload.STREAM_CODEC)
+
+        // Halloween Event Payloads
+        PayloadTypeRegistry.clientboundPlay().register(HalloweenSkySyncPayload.TYPE, HalloweenSkySyncPayload.STREAM_CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(OpenMerchantGuiPayload.TYPE, OpenMerchantGuiPayload.STREAM_CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(OpenGhostNamingPayload.TYPE, OpenGhostNamingPayload.STREAM_CODEC)
+        PayloadTypeRegistry.serverboundPlay().register(CandyChannelPayload.TYPE, CandyChannelPayload.STREAM_CODEC)
+        PayloadTypeRegistry.serverboundPlay().register(MerchantBuyPayload.TYPE, MerchantBuyPayload.STREAM_CODEC)
+        PayloadTypeRegistry.serverboundPlay().register(SubmitGhostNamePayload.TYPE, SubmitGhostNamePayload.STREAM_CODEC)
 
         GameEventHandler(game, landmarkManager, disguiseManager).register()
         GameCommands(game, disguiseManager, landmarkManager).register()
@@ -56,6 +84,9 @@ object ExServerMod : ModInitializer {
         WaveCommands(landmarkManager).register()
         waveManager.register()
 
-        logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot control, and wave defense initialized.")
+        halloweenEvent.register()
+        HalloweenCommands(halloweenEvent).register()
+
+        logger.info("[ExServerMod] Core game, disguise engine, landmarks, AFK bot, wave defense, and Halloween event initialized.")
     }
 }

@@ -67,31 +67,34 @@ class WaveDefenseGameTest {
         repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
         assertEquals(WavePhase.FIGHT, game.phase)
         assertEquals(1, game.currentWave)
+        game.halloweenChoice = HalloweenChoice.TREAT
 
-        // Wave 1 clear triggers Trick or Treat
-        val clearedWave1 = game.onWaveCleared()
-        assertTrue(clearedWave1 is WaveTickResult.PhaseChanged)
-        assertEquals(WavePhase.TRICK_OR_TREAT, (clearedWave1 as WaveTickResult.PhaseChanged).newPhase)
-        assertEquals(WaveDefenseGame.TRICK_OR_TREAT_TICKS, game.remainingTicks)
-
-        // Choosing treat moves to intermission
-        assertTrue(game.chooseTreat(null))
-        assertEquals(WavePhase.INTERMISSION, game.phase)
+        val cleared = game.onWaveCleared()
+        assertTrue(cleared is WaveTickResult.PhaseChanged)
+        cleared as WaveTickResult.PhaseChanged
+        assertEquals(WavePhase.INTERMISSION, cleared.newPhase)
         assertEquals(WaveDefenseGame.INTERMISSION_TICKS, game.remainingTicks)
 
         // During intermission kills keep accumulating
         game.registerKill()
         game.registerKill()
         assertEquals(2, game.kills)
+    }
 
-        // Start wave 2
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-        assertEquals(2, game.currentWave)
+    @Test
+    fun `test wave 1 cleared without choice moves to trick or treat`() {
+        val game = WaveDefenseGame()
+        game.start(listOf(defender1))
+        repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
+        assertEquals(WavePhase.FIGHT, game.phase)
+        assertEquals(1, game.currentWave)
+        assertEquals(HalloweenChoice.NONE, game.halloweenChoice)
 
-        // Wave 2 clear moves directly to intermission
-        val clearedWave2 = game.onWaveCleared()
-        assertTrue(clearedWave2 is WaveTickResult.PhaseChanged)
-        assertEquals(WavePhase.INTERMISSION, (clearedWave2 as WaveTickResult.PhaseChanged).newPhase)
+        val cleared = game.onWaveCleared()
+        assertTrue(cleared is WaveTickResult.PhaseChanged)
+        cleared as WaveTickResult.PhaseChanged
+        assertEquals(WavePhase.TRICK_OR_TREAT, cleared.newPhase)
+        assertEquals(WaveDefenseGame.TRICK_OR_TREAT_TICKS, game.remainingTicks)
     }
 
     @Test
@@ -99,8 +102,8 @@ class WaveDefenseGameTest {
         val game = WaveDefenseGame()
         game.start(listOf(defender1))
         repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
+        game.halloweenChoice = HalloweenChoice.TREAT
         game.onWaveCleared()
-        game.chooseTreat(null)
 
         repeat(WaveDefenseGame.INTERMISSION_TICKS - 1) {
             assertEquals(WaveTickResult.None, game.tick())
@@ -117,17 +120,10 @@ class WaveDefenseGameTest {
         val game = WaveDefenseGame()
         game.start(listOf(defender1, defender2))
 
-        // Countdown -> wave 1
+        // Run through all waves: countdown + (fight-clear + intermission) x waves
         repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-        assertEquals(1, game.currentWave)
-
-        // Wave 1 cleared -> Trick or Treat -> choose Treat
-        game.onWaveCleared()
-        game.chooseTreat(null)
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-
-        // Waves 2 through 10
-        for (wave in 2 until WaveDefenseGame.TOTAL_WAVES) {
+        game.halloweenChoice = HalloweenChoice.TREAT
+        for (wave in 1 until WaveDefenseGame.TOTAL_WAVES) {
             assertEquals(wave, game.currentWave)
             game.onWaveCleared()
             repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
@@ -155,172 +151,14 @@ class WaveDefenseGameTest {
         val game = WaveDefenseGame()
         game.start(listOf(defender1))
         repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-
-        // Wave 1 clear -> choice -> intermission
-        game.onWaveCleared()
-        game.chooseTreat(null)
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-
-        for (wave in 2 until WaveDefenseGame.TOTAL_WAVES) {
+        game.halloweenChoice = HalloweenChoice.TREAT
+        for (wave in 1 until WaveDefenseGame.TOTAL_WAVES) {
             game.onWaveCleared()
             repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
         }
 
         assertTrue(game.onWaveCleared() is WaveTickResult.Victory)
         assertEquals(WaveTickResult.None, game.onWaveCleared(), "Repeated victory call must be a no-op")
-    }
-
-    @Test
-    fun `test trick choice replaces wave 2 with wave 6 and skips to wave 5 upon clear`() {
-        val game = WaveDefenseGame()
-        game.start(listOf(defender1))
-
-        // Countdown -> wave 1
-        repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-        assertEquals(1, game.currentWave)
-
-        // Wave 1 cleared -> Trick or Treat
-        assertEquals(WavePhase.TRICK_OR_TREAT, (game.onWaveCleared() as WaveTickResult.PhaseChanged).newPhase)
-
-        // Defender chooses Trick
-        assertTrue(game.chooseTrick())
-        assertTrue(game.isTrickWave)
-        assertEquals(HalloweenChoice.TRICK, game.halloweenChoice)
-        assertEquals(WavePhase.INTERMISSION, game.phase)
-
-        // Intermission leads to Wave 2 (Trick Wave)
-        repeat(WaveDefenseGame.INTERMISSION_TICKS - 1) { game.tick() }
-        val waveStarted = game.tick()
-        assertTrue(waveStarted is WaveTickResult.WaveStarted)
-        waveStarted as WaveTickResult.WaveStarted
-        assertEquals(2, waveStarted.wave)
-        assertTrue(waveStarted.isTrick)
-        assertEquals(WaveDefenseGame.buildWave(6), waveStarted.groups, "Trick wave 2 must spawn wave 6 composition")
-
-        // Clearing Trick Wave 2 skips waves 3 and 4, jumping to wave 5
-        val clearResult = game.onWaveCleared()
-        assertTrue(clearResult is WaveTickResult.TrickWaveCleared)
-        assertEquals(5, (clearResult as WaveTickResult.TrickWaveCleared).skippedToWave)
-        assertEquals(4, game.currentWave)
-        assertFalse(game.isTrickWave)
-        assertTrue(game.hasSecondChanceToken, "Clearing trick wave 2 must grant second chance token")
-        assertEquals(WavePhase.INTERMISSION, game.phase)
-
-        // After intermission, wave 5 begins!
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-        assertEquals(5, game.currentWave)
-        assertEquals(WavePhase.FIGHT, game.phase)
-    }
-
-    @Test
-    fun `test trick second chance token triggers 60s recovery and restarts same wave`() {
-        val game = WaveDefenseGame()
-        game.start(listOf(defender1))
-
-        // Wave 1 -> Trick
-        repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-        game.onWaveCleared()
-        game.chooseTrick()
-
-        // Beat Trick Wave 2 -> skips to wave 5 with Second Chance token
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-        assertEquals(2, game.currentWave)
-        game.onWaveCleared()
-        assertTrue(game.hasSecondChanceToken)
-
-        // Advance through waves 5, 6, 7 to reach wave 8
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() } // starts wave 5
-        assertEquals(5, game.currentWave)
-        game.onWaveCleared()
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() } // starts wave 6
-        assertEquals(6, game.currentWave)
-        game.onWaveCleared()
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() } // starts wave 7
-        assertEquals(7, game.currentWave)
-        game.onWaveCleared()
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() } // starts wave 8
-        assertEquals(8, game.currentWave)
-        assertEquals(WavePhase.FIGHT, game.phase)
-
-        // Defender dies on wave 8 -> second chance triggers 60s recovery
-        assertTrue(game.triggerSecondChanceRecovery())
-        assertFalse(game.hasSecondChanceToken, "Second chance token must be consumed")
-        assertEquals(WavePhase.RECOVERY, game.phase)
-        assertEquals(WaveDefenseGame.RECOVERY_TICKS, game.remainingTicks)
-
-        // Ticking through 60s recovery restarts wave 8!
-        repeat(WaveDefenseGame.RECOVERY_TICKS - 1) {
-            assertEquals(WaveTickResult.None, game.tick())
-        }
-        val restarted = game.tick()
-        assertTrue(restarted is WaveTickResult.WaveStarted)
-        assertEquals(8, (restarted as WaveTickResult.WaveStarted).wave)
-        assertEquals(8, game.currentWave)
-        assertEquals(WavePhase.FIGHT, game.phase)
-
-        // A subsequent death has no second chance token left
-        assertFalse(game.triggerSecondChanceRecovery())
-    }
-
-    @Test
-    fun `test treat choice fresh sets checkpoint flag and proceeds to wave 2`() {
-        val game = WaveDefenseGame()
-        game.start(listOf(defender1))
-        repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-        game.onWaveCleared()
-
-        // Fresh treat without existing checkpoint
-        assertTrue(game.chooseTreat(null))
-        assertTrue(game.willSaveCheckpointOnDeath)
-        assertEquals(HalloweenChoice.TREAT, game.halloweenChoice)
-        assertFalse(game.isTrickWave)
-
-        // Next wave is standard wave 2
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-        assertEquals(2, game.currentWave)
-    }
-
-    @Test
-    fun `test treat choice with checkpoint resumes directly at checkpoint wave without re-saving`() {
-        val game = WaveDefenseGame()
-        game.start(listOf(defender1))
-        repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-        game.onWaveCleared()
-
-        // Resume at wave 8
-        assertTrue(game.chooseTreat(8))
-        assertFalse(game.willSaveCheckpointOnDeath, "Resumed run must NOT allow re-saving checkpoint")
-        assertEquals(7, game.currentWave)
-
-        // After intermission, wave 8 starts directly
-        repeat(WaveDefenseGame.INTERMISSION_TICKS - 1) { game.tick() }
-        val wave8 = game.tick()
-        assertTrue(wave8 is WaveTickResult.WaveStarted)
-        assertEquals(8, (wave8 as WaveTickResult.WaveStarted).wave)
-        assertEquals(8, game.currentWave)
-    }
-
-    @Test
-    fun `test trick or treat timeout defaults to normal wave 2`() {
-        val game = WaveDefenseGame()
-        game.start(listOf(defender1))
-        repeat(WaveDefenseGame.COUNTDOWN_TICKS) { game.tick() }
-        game.onWaveCleared()
-        assertEquals(WavePhase.TRICK_OR_TREAT, game.phase)
-
-        // Run through all 30 seconds of timeout
-        repeat(WaveDefenseGame.TRICK_OR_TREAT_TICKS - 1) {
-            assertEquals(WaveTickResult.None, game.tick())
-        }
-        val timeoutResult = game.tick()
-        assertTrue(timeoutResult is WaveTickResult.PhaseChanged)
-        assertEquals(WavePhase.INTERMISSION, (timeoutResult as WaveTickResult.PhaseChanged).newPhase)
-        assertEquals(HalloweenChoice.NONE, game.halloweenChoice)
-        assertFalse(game.isTrickWave)
-
-        // Intermission starts normal wave 2
-        repeat(WaveDefenseGame.INTERMISSION_TICKS) { game.tick() }
-        assertEquals(2, game.currentWave)
     }
 
     @Test

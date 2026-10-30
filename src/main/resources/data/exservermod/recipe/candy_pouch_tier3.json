@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "TTT",
+    "TGT",
+    "TTT"
+  ],
+  "key": {
+    "T": "minecraft:totem_of_undying",
+    "G": [
+      "minecraft:white_stained_glass",
+      "minecraft:glass"
+    ]
+  },
+  "result": {
+    "count": 1,
+    "id": "exservermod:candy_pouch_tier3"
+  }
+}

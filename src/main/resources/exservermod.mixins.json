@@ -16,7 +16,17 @@
   ],
   "client": [
     "AvatarRendererMixin",
-    "ClientEntityRenderDispatcherMixin"
+    "BlazeRendererBossTextureMixin",
+    "ClientEntityRenderDispatcherMixin",
+    "EntityRenderStateMixin",
+    "EntityRendererBossTextureMixin",
+    "FogRendererMixin",
+    "LivingEntityRendererBossTextureMixin",
+    "LivingEntityRendererExtractStateMixin",
+    "SkyRendererMixin",
+    "WardenRendererBossTextureMixin",
+    "WitchRendererBossTextureMixin",
+    "ZombieRendererBossTextureMixin"
   ],
   "injectors": {
     "defaultRequire": 1

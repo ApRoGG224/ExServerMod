@@ -111,46 +111,38 @@ class WaveCommands(
                         Commands
                             .literal("choice")
                             .then(
-                                Commands
-                                    .literal("trick")
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TRICK)
-                                        }
-                                        1
-                                    },
+                                Commands.literal("trick").executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TRICK)
+                                    }
+                                    1
+                                },
                             ).then(
-                                Commands
-                                    .literal("treat")
-                                    .executes { ctx ->
-                                        val player = ctx.source.player
-                                        if (player != null) {
-                                            ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TREAT)
-                                        }
-                                        1
-                                    },
+                                Commands.literal("treat").executes { ctx ->
+                                    val player = ctx.source.player
+                                    if (player != null) {
+                                        ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TREAT)
+                                    }
+                                    1
+                                },
                             ),
                     ).then(
-                        Commands
-                            .literal("trick")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TRICK)
-                                }
-                                1
-                            },
+                        Commands.literal("trick").executes { ctx ->
+                            val player = ctx.source.player
+                            if (player != null) {
+                                ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TRICK)
+                            }
+                            1
+                        },
                     ).then(
-                        Commands
-                            .literal("treat")
-                            .executes { ctx ->
-                                val player = ctx.source.player
-                                if (player != null) {
-                                    ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TREAT)
-                                }
-                                1
-                            },
+                        Commands.literal("treat").executes { ctx ->
+                            val player = ctx.source.player
+                            if (player != null) {
+                                ExServerMod.waveManager.handleHalloweenChoice(player, HalloweenChoice.TREAT)
+                            }
+                            1
+                        },
                     ),
             )
         }
