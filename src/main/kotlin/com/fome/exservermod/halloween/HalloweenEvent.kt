@@ -12,6 +12,9 @@ import com.fome.exservermod.halloween.network.OpenGhostNamingPayload
 import com.fome.exservermod.halloween.network.OpenMerchantGuiPayload
 import com.fome.exservermod.halloween.network.SubmitGhostNamePayload
 import com.fome.exservermod.landmarks.LandmarkManager
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.reflect.TypeToken
 import it.unimi.dsi.fastutil.ints.IntArrayList
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
@@ -39,6 +42,7 @@ import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.phys.Vec3
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -75,10 +79,63 @@ class HalloweenEvent(
             )
     }
 
+    private val petsFile = File(storageFile.parentFile, "halloween_ghost_pets.json")
+    private val playerPets: MutableMap<UUID, UUID> = ConcurrentHashMap()
+
     init {
         instance = this
         config = HalloweenConfig.loadOrCreate(configFile)
         balanceManager = HalloweenBalanceManager(storageFile)
+        loadPlayerPets()
+    }
+
+    private fun loadPlayerPets() {
+        if (!petsFile.exists()) return
+        try {
+            val json = petsFile.readText(Charsets.UTF_8)
+            val type = object : TypeToken<Map<String, String>>() {}.type
+            val loaded: Map<String, String>? = Gson().fromJson(json, type)
+            playerPets.clear()
+            loaded?.forEach { (k, v) ->
+                try {
+                    playerPets[UUID.fromString(k)] = UUID.fromString(v)
+                } catch (_: IllegalArgumentException) {
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    fun savePlayerPets() {
+        try {
+            petsFile.parentFile?.mkdirs()
+            val map = playerPets.mapKeys { it.key.toString() }.mapValues { it.value.toString() }
+            petsFile.writeText(GsonBuilder().setPrettyPrinting().create().toJson(map), Charsets.UTF_8)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun hasActiveGhostPet(player: ServerPlayer): Boolean {
+        val petUuid = playerPets[player.uuid]
+        val server = player.level().server
+        if (petUuid != null) {
+            for (lvl in server.allLevels.toList()) {
+                val entity = lvl.getEntity(petUuid)
+                if (entity != null && entity.isAlive) {
+                    return true
+                }
+            }
+        }
+        for (lvl in server.allLevels.toList()) {
+            for (entity in lvl.allEntities) {
+                if (entity is GhostPetEntity && entity.ownerUuid == player.uuid && entity.isAlive) {
+                    playerPets[player.uuid] = entity.uuid
+                    savePlayerPets()
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     var phase: HalloweenPhase = HalloweenPhase.IDLE
@@ -96,7 +153,6 @@ class HalloweenEvent(
     private var spawnedMerchantUuid: UUID? = null
     private val spawnedCandies: MutableList<CandyEntity> = mutableListOf()
     private val spawnedBloodMobs: MutableList<Mob> = mutableListOf()
-    private val playerPets: MutableMap<UUID, UUID> = mutableMapOf()
 
     fun register() {
         registerServerTick()
@@ -659,6 +715,15 @@ class HalloweenEvent(
         player: ServerPlayer,
         itemKey: String,
     ) {
+        if (itemKey == "ghost_pet" && hasActiveGhostPet(player)) {
+            player.sendSystemMessage(
+                Component.translatable("exservermod.halloween.already_have_pet").withStyle(ChatFormatting.RED),
+                true,
+            )
+            player.level().playSound(null, player.x, player.y, player.z, SoundEvents.VILLAGER_NO, SoundSource.NEUTRAL, 1.0f, 1.0f)
+            return
+        }
+
         val cost = config.prices[itemKey] ?: return
         val mgr = balanceManager ?: return
 
@@ -715,7 +780,8 @@ class HalloweenEvent(
             // Refresh merchant GUI for normal items
             val newBalance = mgr.getBalance(player.uuid)
             val prices = activeMerchantWares.map { config.prices[it] ?: 100 }
-            ServerPlayNetworking.send(player, OpenMerchantGuiPayload(newBalance, activeMerchantWares, prices))
+            val hasPet = hasActiveGhostPet(player)
+            ServerPlayNetworking.send(player, OpenMerchantGuiPayload(newBalance, activeMerchantWares, prices, hasPet))
         }
     }
 
@@ -742,6 +808,7 @@ class HalloweenEvent(
         sLevel.addFreshEntity(pet)
 
         playerPets[player.uuid] = pet.uuid
+        savePlayerPets()
 
         player.level().playSound(
             null,
@@ -804,6 +871,7 @@ class HalloweenEvent(
             clearCandies()
             clearBloodMobs(server)
             balanceManager?.save()
+            savePlayerPets()
         }
     }
 }

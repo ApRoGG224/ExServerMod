@@ -9,6 +9,7 @@ data class OpenMerchantGuiPayload(
     val balance: Int,
     val wares: List<String>,
     val prices: List<Int>,
+    val hasGhostPet: Boolean = false,
 ) : CustomPacketPayload {
     companion object {
         val ID: Identifier = Identifier.parse("exservermod:open_merchant_gui")
@@ -21,7 +22,8 @@ data class OpenMerchantGuiPayload(
                     val count = buf.readVarInt()
                     val waresList = (0 until count).map { buf.readUtf() }
                     val pricesList = (0 until count).map { buf.readVarInt() }
-                    return OpenMerchantGuiPayload(bal, waresList, pricesList)
+                    val hasGhostPet = if (buf.isReadable) buf.readBoolean() else false
+                    return OpenMerchantGuiPayload(bal, waresList, pricesList, hasGhostPet)
                 }
 
                 override fun encode(
@@ -32,6 +34,7 @@ data class OpenMerchantGuiPayload(
                     buf.writeVarInt(payload.wares.size)
                     payload.wares.forEach { buf.writeUtf(it) }
                     payload.prices.forEach { buf.writeVarInt(it) }
+                    buf.writeBoolean(payload.hasGhostPet)
                 }
             }
     }

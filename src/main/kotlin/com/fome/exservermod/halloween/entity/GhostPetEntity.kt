@@ -10,7 +10,6 @@ import net.minecraft.sounds.SoundSource
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.InteractionResult
 import net.minecraft.world.damagesource.DamageSource
-import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MoverType
@@ -24,8 +23,6 @@ import net.minecraft.world.level.material.Fluids
 import net.minecraft.world.level.storage.ValueInput
 import net.minecraft.world.level.storage.ValueOutput
 import net.minecraft.world.phys.Vec3
-import net.minecraft.world.scores.TeamColor
-import java.util.Optional
 import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.sin
@@ -132,50 +129,21 @@ class GhostPetEntity(
 
     override fun remove(reason: RemovalReason) {
         removeLight()
-        try {
-            (level() as? ServerLevel)?.scoreboard?.removePlayerFromTeam(stringUUID)
-        } catch (_: Exception) {
-        }
         super.remove(reason)
-    }
-
-    private fun ensureBlueGlow(sLevel: ServerLevel) {
-        if (tickCount % 40 == 1) {
-            try {
-                val scoreboard = sLevel.scoreboard
-                val teamName = "ghost_pet_glow"
-                var team = scoreboard.getPlayerTeam(teamName)
-                if (team == null) {
-                    team = scoreboard.addPlayerTeam(teamName)
-                    team.setColor(Optional.of(TeamColor.AQUA))
-                }
-                if (!team.players.contains(stringUUID)) {
-                    scoreboard.addPlayerToTeam(stringUUID, team)
-                }
-                if (!hasEffect(MobEffects.GLOWING)) {
-                    addEffect(
-                        MobEffectInstance(
-                            MobEffects.GLOWING,
-                            MobEffectInstance.INFINITE_DURATION,
-                            0,
-                            false,
-                            false,
-                            false,
-                        ),
-                    )
-                }
-            } catch (_: Exception) {
-            }
-        }
     }
 
     override fun tick() {
         super.tick()
         noPhysics = true
 
-        val sLevel = level() as? ServerLevel ?: return
-        ensureBlueGlow(sLevel)
+        if (hasEffect(MobEffects.GLOWING)) {
+            removeEffect(MobEffects.GLOWING)
+        }
+        if (hasGlowingTag()) {
+            setGlowingTag(false)
+        }
 
+        val sLevel = level() as? ServerLevel ?: return
         val currentOwnerUuid = ownerUuid ?: return
 
         // Atmospheric bright soul-blue flame, ascending souls, and cyan dust particles

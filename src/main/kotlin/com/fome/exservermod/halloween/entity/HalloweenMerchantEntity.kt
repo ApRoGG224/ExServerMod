@@ -109,8 +109,9 @@ class HalloweenMerchantEntity(
                     generated
                 }
             val prices = wares.map { HalloweenEvent.config.prices[it] ?: 100 }
+            val hasPet = HalloweenEvent.instance?.hasActiveGhostPet(player) ?: false
 
-            ServerPlayNetworking.send(player, OpenMerchantGuiPayload(balance, wares, prices))
+            ServerPlayNetworking.send(player, OpenMerchantGuiPayload(balance, wares, prices, hasPet))
 
             level().playSound(
                 null,

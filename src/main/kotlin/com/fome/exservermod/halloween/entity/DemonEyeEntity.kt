@@ -17,10 +17,12 @@ import net.minecraft.sounds.SoundSource
 import net.minecraft.util.Mth
 import net.minecraft.world.damagesource.DamageSource
 import net.minecraft.world.entity.EntityType
+import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.MoverType
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier
 import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.monster.Monster
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.levelgen.Heightmap
@@ -86,6 +88,13 @@ class DemonEyeEntity(
     override fun addAdditionalSaveData(output: ValueOutput) {
         super.addAdditionalSaveData(output)
         output.putInt("Variant", getVariant())
+    }
+
+    override fun canAttack(target: LivingEntity): Boolean {
+        if (target is Player && (target.isCreative || target.isSpectator)) {
+            return false
+        }
+        return super.canAttack(target)
     }
 
     override fun getAmbientSound(): SoundEvent = SoundEvents.PHANTOM_AMBIENT
@@ -158,11 +167,21 @@ class DemonEyeEntity(
             )
         }
 
-        // Strict 30 blocks player detection radius
+        // Strict 30 blocks player detection radius (ignoring creative & spectator players)
         var currentTarget = target
-        if (currentTarget == null || !currentTarget.isAlive || currentTarget.distanceToSqr(this) > 900.0) {
-            val nearest = sLevel.getNearestPlayer(this, 30.0)
-            currentTarget = if (nearest != null && nearest.isAlive && !nearest.isSpectator) nearest else null
+        if (currentTarget == null ||
+            !currentTarget.isAlive ||
+            currentTarget.isSpectator ||
+            (currentTarget is Player && currentTarget.isCreative) ||
+            currentTarget.distanceToSqr(this) > 900.0
+        ) {
+            val nearest =
+                sLevel
+                    .players()
+                    .filter { p ->
+                        p.isAlive && !p.isSpectator && !p.isCreative && p.distanceToSqr(this) <= 900.0
+                    }.minByOrNull { it.distanceToSqr(this) }
+            currentTarget = nearest
             target = currentTarget
         }
 

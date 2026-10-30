@@ -81,11 +81,20 @@ class HalloweenMerchantScreen(
         payload.wares.forEachIndexed { index, wareKey ->
             val price = payload.prices.getOrElse(index) { 100 }
             val y = startY + (index * rowHeight)
-            val canAfford = payload.balance >= price
+            val isPet = wareKey == "ghost_pet"
+            val alreadyOwned = isPet && payload.hasGhostPet
+            val canAfford = payload.balance >= price && !alreadyOwned
+
+            val buttonText =
+                if (alreadyOwned) {
+                    Component.translatable("exservermod.halloween.already_owned")
+                } else {
+                    Component.translatable("exservermod.halloween.buy")
+                }
 
             val buyButton =
                 Button
-                    .builder(Component.translatable("exservermod.halloween.buy")) {
+                    .builder(buttonText) {
                         ClientPlayNetworking.send(MerchantBuyPayload(wareKey))
                     }.bounds(buttonX, y + 2, buttonWidth, buttonHeight)
                     .build()
@@ -158,9 +167,23 @@ class HalloweenMerchantScreen(
             }
 
             // Price text (aligned to the left of the Buy button)
-            val canAfford = payload.balance >= price
-            val cost = Component.translatable("exservermod.halloween.cost", price)
-            val costColor = if (canAfford) 0xFF55FF55.toInt() else 0xFFFF5555.toInt()
+            val isPet = wareKey == "ghost_pet"
+            val alreadyOwned = isPet && payload.hasGhostPet
+            val canAfford = (payload.balance >= price) && !alreadyOwned
+            val cost =
+                if (alreadyOwned) {
+                    Component.translatable("exservermod.halloween.owned_status")
+                } else {
+                    Component.translatable("exservermod.halloween.cost", price)
+                }
+            val costColor =
+                if (alreadyOwned) {
+                    0xFFAAAAAA.toInt()
+                } else if (canAfford) {
+                    0xFF55FF55.toInt()
+                } else {
+                    0xFFFF5555.toInt()
+                }
             val costWidth = font.width(cost)
             val costX = buttonX - 8 - costWidth
             extractor.text(font, cost, costX, y + 8, costColor)
